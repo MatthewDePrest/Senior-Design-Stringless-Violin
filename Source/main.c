@@ -5,8 +5,8 @@ int main(int argc, char const *argv[])
 {
     int stringPressed = 1;
     double positionPressed = 0.55;
-    int baseFreq = 196;
-    int freq = calculatePitch(stringPressed, positionPressed, baseFreq);
-    printf("%d\n", freq);
+    float baseFreq = 196;
+    float freq = calculatePitch(stringPressed, positionPressed, baseFreq);
+    printf("%.1f\n", freq);
     return 0;
 }
