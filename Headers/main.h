@@ -2,8 +2,8 @@
 #define MAIN_H
 
 typedef struct {
-    int [4] pressures;
-    double [4] positions;
+    int pressures[4];
+    double positions[4];
     double bowSpeed;
     double baseFreq;
 } AllData;
