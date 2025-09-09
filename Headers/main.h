@@ -5,7 +5,8 @@ typedef struct {
     int pressures[4];
     double positions[4];
     double bowSpeed;
-    double baseFreq;
-} AllData;
+    double lowestFreq;
+    double freq;
+} allData;
 
 #endif
