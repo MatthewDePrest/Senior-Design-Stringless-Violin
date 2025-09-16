@@ -7,12 +7,18 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "${file}",
+                "main.c",
+                "pressureSensor.c",
+                "touchSensor.c",
+                "accelerometer.c",
+                "output.c",
+                "noteConversion.c",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
+                "violin",
+                "-lm"
             ],
             "options": {
-                "cwd": "${fileDirname}"
+                "cwd": "${workspaceFolder}/Source"
             },
             "problemMatcher": [
                 "$gcc"

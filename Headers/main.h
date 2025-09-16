@@ -3,10 +3,16 @@
 
 typedef struct {
     int pressures[4];
-    double positions[4];
-    double bowSpeed;
-    double lowestFreq;
-    double freq;
+    float positions[4];
+    float strings[4];
+    float bowSpeed;
+    float freq;
 } allData;
+
+void noteConversion(allData *data);
+void output(allData *data);
+void accelerometer(allData *data);
+void pressureSensor(allData *data);
+void touchSensor(allData *data);
 
 #endif
