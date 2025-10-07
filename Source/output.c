@@ -11,7 +11,7 @@ void output(allData *data) {
 
     for(int i = 0; i < 4; i++) {
         if (data->pressures[i] > 10) {
-            total += (amplitude * data->pressures[i]) * sin(2 * M_PI * data->strings[i] * t);
+            total += (amplitude * data->pressures[i]) * (2 * M_PI * data->stringsFreqs[i] * t); // TODO: include sin
         }
     }
 }

@@ -35,7 +35,8 @@ void read_frequencies() {
 void noteConversion(allData *data) {
     read_frequencies();
 
-    for (int i = 0; i < 4; i++) {
-        data->strings[i] = base[i] * (STRING_LEN / (STRING_LEN - data->positions[i]));
-    }
+    data->stringsFreqs[0] = base[0] * (STRING_LEN / (STRING_LEN - data->positions[0]));
+    data->stringsFreqs[1] = base[1] * (STRING_LEN / (STRING_LEN - data->positions[1]));
+    data->stringsFreqs[2] = base[2] * (STRING_LEN / (STRING_LEN - data->positions[2]));
+    data->stringsFreqs[3] = base[3] * (STRING_LEN / (STRING_LEN - data->positions[3]));
 }

@@ -1,27 +1,16 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "(gdb) Launch Violin",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Source/violin",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/Source",
-            "environment": [],
-            "externalConsole": false,
-            "MIMode": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                }
-            ]
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Violin",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/violin",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "MIMode": "gdb",
+      "preLaunchTask": "build violin"
+    }
+  ]
 }
