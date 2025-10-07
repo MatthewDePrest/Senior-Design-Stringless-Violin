@@ -1,5 +1,11 @@
 #include <stdio.h>
 #include "../Headers/main.h"
+#include "pressureSensor.c"
+#include "touchSensor.c"
+#include "accelerometer.c"
+#include "output.c"
+#include "noteConversion.c"
+
 
 int main(int argc, char const *argv[])
 {
@@ -7,11 +13,14 @@ int main(int argc, char const *argv[])
     pressureSensor(&data);  //data.pressures = {20, 0, 0, 0};
     touchSensor(&data);      //data.positions = {50, 60, 70, 80};
     accelerometer(&data);    //data.bowSpeed = 100;
-    data.freq = 200;
 
     output(&data);
 
-    printf("%.1f\n", data.freq);
+    // Print all values saved in allData
+    printf("Pressures: [%d, %d, %d, %d]\n", data.pressures[0], data.pressures[1], data.pressures[2], data.pressures[3]);
+    printf("Positions: [%.1f, %.1f, %.1f, %.1f]\n", data.positions[0], data.positions[1], data.positions[2], data.positions[3]);
+    printf("Bow Speed: %d\n", data.bowSpeed);
+    printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.strings[0], data.strings[1], data.strings[2], data.strings[3]);
 
     return 0;
 }

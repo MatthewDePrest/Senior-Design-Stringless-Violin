@@ -1,12 +1,14 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+static float STRING_LEN = 330; // Length of the strings on the violin's neck, in mm
+static float BASE_FREQUENCY = 196; // Frequency of the lowest note playable, in Hz
+
 typedef struct {
     int pressures[4];
     float positions[4];
     float strings[4];
     float bowSpeed;
-    float freq;
 } allData;
 
 void noteConversion(allData *data);

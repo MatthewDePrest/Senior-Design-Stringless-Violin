@@ -1,13 +1,41 @@
 #include "../Headers/main.h"
+#include <math.h>
+
+float base[4];
+
+void defaultFrequency() {
+    base[0] = 196.0;
+    base[1] = 293.0;
+    base[2] = 440.0;
+    base[3] = 659.0;
+    return;
+}
+
+void read_frequencies() {
+    FILE *file = fopen("../App/violin_frequencies.txt", "r");
+    if (file == NULL) {
+        perror("Failed to open frequencies file");
+        defaultFrequency();
+        return;
+    }
+
+    for (int i = 0; i < 4; i++) {
+        if (!(fscanf(file, "%f\n", &base[i]))) {
+            fprintf(stderr, "Failed to read frequency of string %d\n", i);
+            fclose(file);
+            defaultFrequency();
+            return;
+        }
+    }
+
+    fclose(file);
+    return;
+}
 
 void noteConversion(allData *data) {
-    static float STRING_LEN = 200; //mm
+    read_frequencies();
 
-    float opens[4] = {196.00, 293.66, 440.00, 659.25}; //calculate this later by base frequency
-
-    data->strings[0] = opens[0] * STRING_LEN / (STRING_LEN - data->positions[0]);
-    data->strings[1] = opens[1] * STRING_LEN / (STRING_LEN - data->positions[1]);
-    data->strings[2] = opens[2] * STRING_LEN / (STRING_LEN - data->positions[2]);
-    data->strings[3] = opens[3] * STRING_LEN / (STRING_LEN - data->positions[3]);
-
+    for (int i = 0; i < 4; i++) {
+        data->strings[i] = base[i] * (STRING_LEN / (STRING_LEN - data->positions[i]));
+    }
 }
