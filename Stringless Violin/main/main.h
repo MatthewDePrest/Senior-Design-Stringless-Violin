@@ -16,7 +16,7 @@ typedef struct {
 } allData;
 
 void noteConversion(allData *data);
-void output(allData *data);
+void output(void *pvParameters);
 void accelerometer(allData *data);
 void pressureSensor(allData *data);
 void touchSensor(allData *data);
