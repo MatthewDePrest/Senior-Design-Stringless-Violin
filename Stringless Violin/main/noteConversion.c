@@ -1,4 +1,4 @@
-#include "../Headers/main.h"
+#include "main.h"
 #include <math.h>
 
 float base[4];

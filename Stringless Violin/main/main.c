@@ -1,5 +1,7 @@
 #include <stdio.h>
-#include "../Headers/main.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "main.h"
 
 
 int main(int argc, char const *argv[])
@@ -19,4 +21,8 @@ int main(int argc, char const *argv[])
     printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.stringsFreqs[0], data.stringsFreqs[1], data.stringsFreqs[2], data.stringsFreqs[3]);
 
     return 0;
+}
+void app_main(void)
+{
+    main(0, NULL);
 }

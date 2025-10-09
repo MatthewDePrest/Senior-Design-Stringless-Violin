@@ -12,6 +12,7 @@ typedef struct {
     float positions[4];
     float stringsFreqs[4];
     float bowSpeed;
+    int end;
 } allData;
 
 void noteConversion(allData *data);
