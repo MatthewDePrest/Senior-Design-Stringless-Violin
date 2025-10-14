@@ -1,4 +1,7 @@
+#include "esp_mac.h"
+#include "driver/gpio.h"
 #include <stdio.h>
+#include <inttypes.h>
 // Include the generated SDK config so CONFIG_* macros (like CONFIG_FREERTOS_HZ)
 // are defined for FreeRTOS macros such as pdMS_TO_TICKS.
 #include "sdkconfig.h"
@@ -21,7 +24,18 @@
 // provided by FreeRTOS headers when the build environment is configured.
 #define pdMS_TO_TICKS(ms) ((TickType_t) ((ms) / portTICK_PERIOD_MS))
 #endif
+#include "esp_chip_info.h"
+#include "esp_flash.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "sdkconfig.h"
 #include "main.h"
+
+#define INPUT_PIN   GPIO_NUM_4
+#define OUTPUT_PIN  GPIO_NUM_5
+
+static const char *TAG = "GPIO";
+
 
 
 void app_main(void)
@@ -58,7 +72,20 @@ void app_main(void)
 
     // Main loop (Core 0)
     int count = 0;
+    gpio_config_t io_conf = {                   // maps pin bit mask to pin number
+        .pin_bit_mask = 1ULL << INPUT_PIN,
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE
+    };
+
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
+
     while (!data.end) {
+        int level = gpio_get_level(INPUT_PIN);                     
+        ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
+
         printf("[Core %d] Main loop running...\n", xPortGetCoreID());
         count++;
         if (count > 5) data.end = 1;  // Stop after 5 loops for testing

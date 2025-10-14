@@ -33,7 +33,8 @@ void read_frequencies() {
 }
 
 void noteConversion(allData *data) {
-    read_frequencies();
+    //read_frequencies();
+    defaultFrequency();
 
     data->stringsFreqs[0] = base[0] * (STRING_LEN / (STRING_LEN - data->positions[0]));
     data->stringsFreqs[1] = base[1] * (STRING_LEN / (STRING_LEN - data->positions[1]));
