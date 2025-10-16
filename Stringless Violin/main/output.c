@@ -22,7 +22,7 @@ void output(void *pvParameters) {
                 total += (amplitude * data->pressures[i]) * (2 * M_PI * data->stringsFreqs[i] * t); // TODO: include sin
             }
         }
-        printf("[Core %d] Output running...\n", xPortGetCoreID());
+        //printf("[Core %d] Output running...\n", xPortGetCoreID());
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     vTaskDelete(NULL);

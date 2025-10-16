@@ -65,10 +65,10 @@ void app_main(void)
     accelerometer(&data);    //data.bowSpeed = 100;
 
     // Print all values saved in allData
-    printf("Pressures: [%d, %d, %d, %d]\n", data.pressures[0], data.pressures[1], data.pressures[2], data.pressures[3]);
+    /*printf("Pressures: [%d, %d, %d, %d]\n", data.pressures[0], data.pressures[1], data.pressures[2], data.pressures[3]);
     printf("Positions: [%.1f, %.1f, %.1f, %.1f]\n", data.positions[0], data.positions[1], data.positions[2], data.positions[3]);
     printf("Bow Speed: %.1f\n", data.bowSpeed);
-    printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.stringsFreqs[0], data.stringsFreqs[1], data.stringsFreqs[2], data.stringsFreqs[3]);
+    printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.stringsFreqs[0], data.stringsFreqs[1], data.stringsFreqs[2], data.stringsFreqs[3]);*/
 
     // Main loop (Core 0)
     int count = 0;
@@ -86,10 +86,12 @@ void app_main(void)
         int level = gpio_get_level(INPUT_PIN);                     
         ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
 
-        printf("[Core %d] Main loop running...\n", xPortGetCoreID());
+        touchSensor(&data);
+
+        //printf("[Core %d] Main loop running...\n", xPortGetCoreID());
         count++;
         if (count > 5) data.end = 1;  // Stop after 5 loops for testing
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(10)); //2000
     }
 
     vTaskDelete(NULL);
