@@ -79,7 +79,7 @@ void output(void *pvParameters) {
         // For diagnostics, print first few pcm samples occasionally
         if (debug_tick == 0) {
             int toprint = buf_samples < 8 ? buf_samples : 8;
-            printf("pcm[0..%d]:", toprint - 1);
+            printf("pcm[0..%d]:", toprint - 1);                         //TODO: figure out why this prints all zeros
             for (int i = 0; i < toprint; ++i) printf(" %d", pcm[i]);
             printf("\n");
         }
