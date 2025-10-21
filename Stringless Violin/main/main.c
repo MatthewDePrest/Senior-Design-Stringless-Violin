@@ -70,8 +70,7 @@ void app_main(void)
     printf("Bow Speed: %.1f\n", data.bowSpeed);
     printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.stringsFreqs[0], data.stringsFreqs[1], data.stringsFreqs[2], data.stringsFreqs[3]);*/
 
-    // Main loop (Core 0)
-    int count = 0;
+    
     gpio_config_t io_conf = {                   // maps pin bit mask to pin number
         .pin_bit_mask = 1ULL << INPUT_PIN,
         .mode = GPIO_MODE_INPUT,
@@ -82,6 +81,8 @@ void app_main(void)
     ESP_ERROR_CHECK(gpio_config(&io_conf));
     ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
 
+    // Main loop (Core 0)
+    int count = 0;
     while (!data.end) {
         int level = gpio_get_level(INPUT_PIN);                     
         ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level

@@ -3,7 +3,7 @@
 
 float base[4];
 
-void defaultFrequency() {
+static void defaultFrequency() {
     base[0] = 196.0;
     base[1] = 293.0;
     base[2] = 440.0;
@@ -11,7 +11,7 @@ void defaultFrequency() {
     return;
 }
 
-void read_frequencies() {
+static void read_frequencies() {
     FILE *file = fopen("../App/violin_frequencies.txt", "r");
     if (file == NULL) {
         perror("Failed to open frequencies file");
@@ -32,12 +32,18 @@ void read_frequencies() {
     return;
 }
 
+static float toMM(float positions) {
+    int length;
+    length = (positions / 1900) * 300.0; // Scale to 0-300 mm
+    return length;
+}
+
 void noteConversion(allData *data) {
     //read_frequencies();
     defaultFrequency();
 
-    data->stringsFreqs[0] = base[0] * (STRING_LEN / (STRING_LEN - data->positions[0]));
-    data->stringsFreqs[1] = base[1] * (STRING_LEN / (STRING_LEN - data->positions[1]));
-    data->stringsFreqs[2] = base[2] * (STRING_LEN / (STRING_LEN - data->positions[2]));
-    data->stringsFreqs[3] = base[3] * (STRING_LEN / (STRING_LEN - data->positions[3]));
+    data->stringsFreqs[0] = base[0] * (STRING_LEN / (STRING_LEN - toMM(data->positions[0])));
+    data->stringsFreqs[1] = base[1] * (STRING_LEN / (STRING_LEN - toMM(data->positions[1])));
+    data->stringsFreqs[2] = base[2] * (STRING_LEN / (STRING_LEN - toMM(data->positions[2])));
+    data->stringsFreqs[3] = base[3] * (STRING_LEN / (STRING_LEN - toMM(data->positions[3])));
 }

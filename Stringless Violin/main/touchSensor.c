@@ -36,9 +36,9 @@ void adc_init(void) {
 
 void touchSensor(allData *data) {
 
-    int raw = 0;
+    float raw = 0;
     int count = 0;
-    while(count < 50) {
+    while(count < 500) {
         adc_init();
         raw = adc1_get_raw(ADC1_CHANNEL_5);
 
@@ -46,6 +46,7 @@ void touchSensor(allData *data) {
 
         // ESP_ERROR_CHECK(adc_oneshot_read(adc,ADC_CHANNEL_2, &raw));
         vTaskDelay(pdMS_TO_TICKS(10));
-        printf("raw: %d\n", raw); // raw ADC code (no calibration)
+        data->positions[0] = raw;
+        //count++;
     }
 }
