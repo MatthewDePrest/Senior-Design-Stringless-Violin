@@ -1,6 +1,10 @@
 #include <stdio.h>
-#include "../Headers/main.h"
-
+#include "../Stringless Violin/main/main.h"
+#include "../Stringless Violin/main/noteConversion.c"
+#include "../Stringless Violin/main/output.c"
+#include "../Stringless Violin/main/pressureSensor.c"
+#include "../Stringless Violin/main/touchSensor.c"
+#include "../Stringless Violin/main/accelerometer.c"
 
 int main(int argc, char const *argv[])
 {
@@ -10,7 +14,8 @@ int main(int argc, char const *argv[])
     touchSensor(&data);      //data.positions = {50, 60, 70, 80};
     accelerometer(&data);    //data.bowSpeed = 100;
 
-    output(&data);
+    // output(&data);
+    noteConversion(&data);
 
     // Print all values saved in allData
     printf("Pressures: [%d, %d, %d, %d]\n", data.pressures[0], data.pressures[1], data.pressures[2], data.pressures[3]);
