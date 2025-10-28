@@ -3,7 +3,7 @@ import { Slider, Typography, Button, Box } from '@mui/material';
 
 const STRING_NAMES = ['First', 'Second', 'Third', 'Fourth'];
 
-function Tuner({ onSave }) {
+function Tuner({ onSave, onBack }) {
     // Default standard violin tuning frequencies in Hz
     const violinDefault = {
         First: 196.00,
@@ -35,47 +35,63 @@ function Tuner({ onSave }) {
     };
 
     const saveToFile = async () => {
-    try {
-        const response = await fetch('http://localhost:5000/save-frequencies', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(frequencies),
-        });
-        if (response.ok) {
-            alert('Frequencies saved successfully!');
-        } else {
-            alert('Failed to save frequencies.');
+        try {
+            const response = await fetch('http://localhost:5000/save-frequencies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(frequencies),
+            });
+            if (response.ok) {
+                alert('Frequencies saved successfully!');
+            } else {
+                alert('Failed to save frequencies.');
+            }
+        } catch (error) {
+            alert('Error connecting to server.');
+            console.error(error);
         }
-    } catch (error) {
-        alert('Error connecting to server.');
-        console.error(error);
-    }
     };
-
-
 
     return (
         <Box sx={{ width: 300, margin: 'auto', mt: 4 }}>
-        <Typography variant="h5" gutterBottom>Tuner Settings</Typography>
-        {STRING_NAMES.map((string) => (
-            <Box key={string} sx={{ mb: 3 }}>
-                <Typography gutterBottom>{string} String: {frequencies[string].toFixed(0)} Hz</Typography>
-                <Slider
-                    value={frequencies[string]}
-                    onChange={handleSliderChange(string)}
-                    min={50}
-                    max={1000}
-                    step={1}
-                    aria-labelledby={`${string}-string-slider`}
-                />
+            <Typography variant="h5" gutterBottom>Tuner Settings</Typography>
+            {STRING_NAMES.map((string) => (
+                <Box key={string} sx={{ mb: 3 }}>
+                    <Typography gutterBottom>
+                        {string} String: {frequencies[string].toFixed(0)} Hz
+                    </Typography>
+                    <Slider
+                        value={frequencies[string]}
+                        onChange={handleSliderChange(string)}
+                        min={50}
+                        max={1000}
+                        step={1}
+                        aria-labelledby={`${string}-string-slider`}
+                    />
+                </Box>
+            ))}
+
+            <Box sx={{ mt: 2 }}>
+                <Button variant="outlined" onClick={setDefaultViolin} sx={{ mr: 2 }}>
+                    Default Violin
+                </Button>
+                <Button variant="outlined" onClick={setDefaultViola} sx={{ mr: 2 }}>
+                    Default Viola
+                </Button>
+                <Button variant="contained" onClick={saveToFile}>
+                    Save Frequencies
+                </Button>
             </Box>
-        ))}
-      
-        <Button variant="outlined" onClick={setDefaultViolin} sx={{ mr: 2 }}>Default Violin</Button>
-        <Button variant="outlined" onClick={setDefaultViola} sx={{ mr: 2 }}>Default Viola</Button>
-        <Button variant="contained" onClick={saveToFile}>Save Frequencies</Button>
-    </Box>
-  );
+
+            {/* Back button */}
+            <Box sx={{ mt: 4 }}>
+                <Button variant="text" color="secondary" onClick={onBack}>
+                    ← Back to Main Page
+                </Button>
+            </Box>
+        </Box>
+    );
 }
 
 export default Tuner;
+
