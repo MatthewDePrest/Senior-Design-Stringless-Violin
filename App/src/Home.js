@@ -1,11 +1,19 @@
 import React from 'react';
+import './App.css';
 
 function Home({ onNavigateTuner, onNavigateLearning }) {
   return (
-    <div>
+    <div className="App-header">
       <h1>Welcome to the Stringless Violin Companion App</h1>
-      <button onClick={onNavigateTuner}>Go to Tuner</button>
-      <button onClick={onNavigateLearning}>Go to Learning Tools</button>
+      
+      <div className="home-buttons">
+        <button className="tuner-btn" onClick={onNavigateTuner}>
+          Go to Tuner
+        </button>
+        <button className="learning-btn" onClick={onNavigateLearning}>
+          Go to Learning Tools
+        </button>
+      </div>
     </div>
   );
 }
