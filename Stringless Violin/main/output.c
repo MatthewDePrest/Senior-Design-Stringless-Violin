@@ -37,18 +37,22 @@ void output(void *pvParameters) {
         // Update target frequencies
         noteConversion(data);
 
-        // Debug: print inputs and derived frequencies occasionally (once per second)
-        static int debug_tick = 0;
-        debug_tick++;
-        if (debug_tick >= (1000 / buffer_ms)) {
-            debug_tick = 0;
-            printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
-                   data->positions[0], data->positions[1], data->positions[2], data->positions[3],
-                   data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
-            printf("press: [%d, %d, %d, %d] bow: %.1f\n\n",
-                   data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
-                   data->bowSpeed);
-        }
+     // Debug: print inputs and derived frequencies occasionally (once per second)
+     static int debug_tick = 0;
+     debug_tick++;
+     // Snapshot atomic bowSpeed (milli-units) for this buffer
+     int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
+     double bowSpeed = (double)bow_milli / 1000.0;
+
+     if (debug_tick >= (1000 / buffer_ms)) {
+         debug_tick = 0;
+         printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
+             data->positions[0], data->positions[1], data->positions[2], data->positions[3],
+             data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
+         printf("press: [%d, %d, %d, %d] bow: %.3f\n",
+             data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
+             bowSpeed);
+     }
 
         // Simple per-buffer generation
         for (int n = 0; n < buf_samples; n++) {
@@ -60,8 +64,8 @@ void output(void *pvParameters) {
                 double gate = (data->pressures[s] > 10) ? 1.0 : 0.0;
                 if (gate > 0) {
                     double freq = data->stringsFreqs[s];
-                    // amplitude influenced by bowSpeed and pressure
-                    double amplitude = (data->bowSpeed / 100.0) * (data->pressures[s] / 1023.0);
+                    // amplitude influenced by bowSpeed and pressure (use snapshot bowSpeed)
+                    double amplitude = (bowSpeed / 100.0) * (data->pressures[s] / 1023.0);
                     double incr = (2.0 * M_PI * freq) / (double)sample_rate;
                     sample += amplitude * sin(phases[s]) * gate;
                     phases[s] += incr;

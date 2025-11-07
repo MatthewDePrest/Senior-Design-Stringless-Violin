@@ -35,18 +35,10 @@ void adc_init(void) {
 }
 
 void touchSensor(allData *data) {
-
+    // Read a single sample for initialization. Long-running sampling
+    // belongs in a dedicated task rather than a blocking function.
     float raw = 0;
-    int count = 0;
-    while(count < 500) {
-        adc_init();
-        raw = adc1_get_raw(ADC1_CHANNEL_5);
-
-        // adc2_get_raw(ADC_CHANNEL_2, ADC_WIDTH_BIT_12, &raw);
-
-        // ESP_ERROR_CHECK(adc_oneshot_read(adc,ADC_CHANNEL_2, &raw));
-        vTaskDelay(pdMS_TO_TICKS(10));
-        data->positions[0] = raw;
-        //count++;
-    }
+    adc_init();
+    raw = adc1_get_raw(ADC1_CHANNEL_5);
+    data->positions[0] = raw;
 }
