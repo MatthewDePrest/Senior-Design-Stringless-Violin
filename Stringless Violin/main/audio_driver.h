@@ -10,8 +10,8 @@
 // provided later when the hardware arrives.
 esp_err_t audio_driver_init(int sample_rate);
 
-// Write signed 16-bit PCM mono samples. Returns number of samples consumed.
-size_t audio_driver_write(const int16_t *samples, size_t sample_count);
+// Write signed 32-bit PCM mono samples. Returns number of samples consumed.
+size_t audio_driver_write(const int32_t *samples, size_t sample_count);
 
 // Deinitialize/free resources.
 void audio_driver_deinit(void);

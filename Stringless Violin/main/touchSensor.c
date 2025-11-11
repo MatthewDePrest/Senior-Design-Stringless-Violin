@@ -37,8 +37,20 @@ void adc_init(void) {
 void touchSensor(allData *data) {
     // Read a single sample for initialization. Long-running sampling
     // belongs in a dedicated task rather than a blocking function.
-    float raw = 0;
-    adc_init();
-    raw = adc1_get_raw(ADC1_CHANNEL_5);
-    data->positions[0] = raw;
+    static bool first_call = true;
+    int raw = 0;
+    
+    if (first_call) {
+        adc_init();
+        first_call = false;
+    }
+    
+    raw = adc1_get_raw(ADC1_CHANNEL_3);
+    data->positions[0] = (float)raw;
+    
+    // Debug: print occasionally to verify readings
+    static int debug_count = 0;
+    if (debug_count++ % 100 == 0) {
+        printf("touchSensor: raw=%d, pos[0]=%.1f\n", raw, data->positions[0]);
+    }
 }

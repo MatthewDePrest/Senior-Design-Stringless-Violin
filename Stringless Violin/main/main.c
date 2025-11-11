@@ -62,17 +62,13 @@ void app_main(void)
 
     // Initialize sensors before starting the audio task to guarantee the
     // audio task observes initialized values on its first run.
-    printf("main: before pressureSensor\n");
+
     pressureSensor(&data);   //data.pressures = {20, 0, 0, 0};
-    printf("main: after pressureSensor\n");
 
-    printf("main: before touchSensor\n");
     touchSensor(&data);      //data.positions = {50, 60, 70, 80};
-    printf("main: after touchSensor\n");
 
-    printf("main: before accelerometer\n");
     accelerometer(&data);    //data.bowSpeed = 100;
-    printf("main: after accelerometer\n");
+
 
 // Create note conversion task pinned to Core 1
     BaseType_t result = xTaskCreatePinnedToCore(

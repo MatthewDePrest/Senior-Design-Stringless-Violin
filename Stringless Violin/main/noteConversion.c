@@ -1,6 +1,10 @@
 #include "main.h"
 #include <math.h>
 
+// Define the global variables declared as extern in main.h
+float STRING_LEN = 330.0f;        // Length of the strings on the violin's neck, in mm
+float BASE_FREQUENCY = 196.0f;    // Frequency of the lowest note playable, in Hz
+
 float base[4];
 
 static void defaultFrequency() {
@@ -32,18 +36,27 @@ static void read_frequencies() {
     return;
 }
 
-static float toMM(float positions) {
-    int length;
-    length = (positions / 1900) * 300.0; // Scale to 0-300 mm
-    return length;
-}
-
 void noteConversion(allData *data) {
     //read_frequencies();
     defaultFrequency();
 
-    data->stringsFreqs[0] = base[0] * (STRING_LEN / (STRING_LEN - toMM(data->positions[0])));
-    data->stringsFreqs[1] = base[1] * (STRING_LEN / (STRING_LEN - toMM(data->positions[1])));
-    data->stringsFreqs[2] = base[2] * (STRING_LEN / (STRING_LEN - toMM(data->positions[2])));
-    data->stringsFreqs[3] = base[3] * (STRING_LEN / (STRING_LEN - toMM(data->positions[3])));
+    // Use the working-code logic: linearly map ADC position (0..4095)
+    // to frequency within each string's range [open..5th position].
+    // Index mapping in this project:
+    //   0:G (196 Hz) -> max 293.66 Hz
+    //   1:D (293.66 Hz) -> max 440.00 Hz
+    //   2:A (440.00 Hz) -> max 659.25 Hz
+    //   3:E (659.25 Hz) -> max 987.77 Hz
+    const float max_freq[4] = { 293.66f, 440.00f, 659.25f, 987.77f };
+
+    for (int s = 0; s < 4; ++s) {
+        float pos = data->positions[s];
+        // Clamp ADC range defensively
+        if (pos < 0.0f) pos = 0.0f;
+        if (pos >= 4000.0f) pos = 0.0f;
+        float frac = pos / 4095.0f; // 0..1
+        float fmin = base[s];
+        float fmax = max_freq[s];
+        data->stringsFreqs[s] = fmin + frac * (fmax - fmin);
+    }
 }
