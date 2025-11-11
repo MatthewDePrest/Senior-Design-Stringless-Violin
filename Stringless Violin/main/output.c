@@ -1,5 +1,5 @@
-// Simple waveform generator for testing and future codec hookup.
-// Generates mono signed 16-bit PCM by mixing up to 4 sine oscillators.
+// Violin-style synth with harmonics, vibrato, low-pass, and reverb.
+// Integrates with allData struct for pressure, position, and bow speed control.
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -12,85 +12,315 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-// Output task: generates audio buffer and hands to audio driver.
+// ---------- Audio Configuration ----------
+static const uint32_t SAMPLE_RATE = 48000;
+static const size_t FRAMES = 256; // small block for smoother streaming
+static int VOLUME_Q15 = 1200;
+
+// Violin-ish harmonic profile (fundamental + 5 harmonics)
+static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
+#define NH 6  // Number of harmonics (must match HARM array size)
+
+// Vibrato settings
+static bool g_vibrato_on = true;
+static float g_vib_rate_hz = 5.2f;
+static float g_vib_depth_cents = 12.0f;
+
+// Gentle 1-pole low-pass "bow" tone
+static bool g_lpf_on = true;
+static float g_lpf_cut_hz = 4500.0f;
+
+// ---------- 1-pole Low-Pass Filter ----------
+typedef struct {
+    float a;
+    float y;
+} OnePoleLPF;
+
+static void lpf_set_cutoff(OnePoleLPF* lpf, float fc_hz) {
+    float a_ = expf(-2.0f * (float)M_PI * fc_hz / (float)SAMPLE_RATE);
+    lpf->a = fminf(fmaxf(a_, 0.0f), 0.9999f);
+}
+
+static inline float lpf_process(OnePoleLPF* lpf, float x) {
+    lpf->y = (1.0f - lpf->a) * x + lpf->a * lpf->y;
+    return lpf->y;
+}
+
+// ---------- Reverb (Schroeder: 4 combs + 2 allpasses) ----------
+typedef struct {
+    float* buf;
+    int len;
+    int idx;
+    float fb;
+    float damp;
+    float fil;
+} Comb;
+
+static inline float comb_process(Comb* c, float x) {
+    float y = c->buf[c->idx];
+    // one-pole lowpass in feedback
+    c->fil = (1.0f - c->damp) * y + c->damp * c->fil;
+    c->buf[c->idx] = x + c->fil * c->fb;
+    c->idx++;
+    if (c->idx >= c->len) c->idx = 0;
+    return y;
+}
+
+typedef struct {
+    float* buf;
+    int len;
+    int idx;
+    float g;
+} Allpass;
+
+static inline float allpass_process(Allpass* a, float x) {
+    float y = a->buf[a->idx];
+    float out = -x + y;
+    a->buf[a->idx] = x + y * a->g;
+    a->idx++;
+    if (a->idx >= a->len) a->idx = 0;
+    return out;
+}
+
+typedef struct {
+    // Tuned ~30–45 ms combs for 48 kHz; small RAM footprint
+    float c1[1439];
+    float c2[1601];
+    float c3[1867];
+    float c4[2053];
+    float a1[225];
+    float a2[341];
+    
+    Comb combs[4];
+    Allpass aps[2];
+    
+    bool enabled;
+    float mix;    // wet mix 0..1
+    float room;   // feedback amount 0..0.95
+    float damp;   // HF damping 0..1
+} ReverbSC;
+
+static void reverb_init(ReverbSC* rev) {
+    memset(rev->c1, 0, sizeof(rev->c1));
+    memset(rev->c2, 0, sizeof(rev->c2));
+    memset(rev->c3, 0, sizeof(rev->c3));
+    memset(rev->c4, 0, sizeof(rev->c4));
+    memset(rev->a1, 0, sizeof(rev->a1));
+    memset(rev->a2, 0, sizeof(rev->a2));
+    
+    rev->combs[0] = (Comb){rev->c1, 1439, 0, rev->room, rev->damp, 0.0f};
+    rev->combs[1] = (Comb){rev->c2, 1601, 0, rev->room, rev->damp, 0.0f};
+    rev->combs[2] = (Comb){rev->c3, 1867, 0, rev->room, rev->damp, 0.0f};
+    rev->combs[3] = (Comb){rev->c4, 2053, 0, rev->room, rev->damp, 0.0f};
+    
+    rev->aps[0] = (Allpass){rev->a1, 225, 0, 0.5f};
+    rev->aps[1] = (Allpass){rev->a2, 341, 0, 0.5f};
+}
+
+__attribute__((unused))
+static void reverb_retune(ReverbSC* rev) {
+    for (int i = 0; i < 4; i++) {
+        rev->combs[i].fb = rev->room;
+        rev->combs[i].damp = rev->damp;
+    }
+}
+// Note: reverb_retune is available for runtime reverb parameter adjustments
+
+static inline float reverb_process(ReverbSC* rev, float x) {
+    if (!rev->enabled) return x;
+    
+    float s = 0.0f;
+    s += comb_process(&rev->combs[0], x);
+    s += comb_process(&rev->combs[1], x);
+    s += comb_process(&rev->combs[2], x);
+    s += comb_process(&rev->combs[3], x);
+    s *= 0.25f; // average comb sum
+    
+    s = allpass_process(&rev->aps[0], s);
+    s = allpass_process(&rev->aps[1], s);
+    
+    return (1.0f - rev->mix) * x + rev->mix * s; // wet/dry
+}
+
+// ---------- Per-String Note State (with smoothing) ----------
+typedef struct {
+    float f_target;     // target frequency from mapping
+    float f_current;    // smoothed working frequency
+    float amp_target;   // target amplitude (pressure * bow)
+    float amp_current;  // smoothed amplitude
+    float vib_phase;    // vibrato phase accumulator
+    float vib_inc;      // vibrato phase increment
+    float phase[NH];    // harmonic phase accumulators
+} StringState;
+
+// Smoothing coefficients (0..1) smaller = slower glide
+static const float FREQ_GLIDE_COEF = 0.02f;   // frequency portamento per sample
+static const float AMP_GLIDE_COEF  = 0.05f;   // amplitude smoothing per sample
+
+// ---------- Helper Functions ----------
+static inline float cents_to_ratio(float cents) {
+    return powf(2.0f, cents / 1200.0f);
+}
+
+// Fill one audio block with violin synthesis for all 4 strings
+static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data, 
+                                StringState* strings, OnePoleLPF* lpf, ReverbSC* rev) {
+    const float twoPi = 2.0f * (float)M_PI;
+    
+    // Snapshot atomic bowSpeed for this buffer
+    int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
+    float bowSpeed = (float)bow_milli / 1000.0f;
+    
+    static int sample_debug_count = 0;
+    
+    for (size_t i = 0; i < frames; ++i) {
+        float sample = 0.0f;
+        
+        // Mix all 4 strings with smoothing
+        for (int s = 0; s < 4; s++) {
+            // Determine target freq & amp (even if pressure low we glide down rather than abrupt mute)
+            float target_freq = strings[s].f_target;
+            float press_gate = (data->pressures[s] > 10) ? 1.0f : 0.0f;
+            float target_amp = press_gate * (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
+
+            // Glide frequency & amplitude
+            strings[s].f_current += FREQ_GLIDE_COEF * (target_freq - strings[s].f_current);
+            strings[s].amp_current += AMP_GLIDE_COEF * (target_amp - strings[s].amp_current);
+
+            // Skip if nearly silent
+            if (strings[s].amp_current < 0.0005f) continue;
+
+            float f_work = strings[s].f_current;
+            if (g_vibrato_on) {
+                float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
+                strings[s].vib_phase += strings[s].vib_inc;
+                if (strings[s].vib_phase > twoPi) strings[s].vib_phase -= twoPi;
+                f_work *= cents_to_ratio(cents);
+            }
+
+            float string_sample = 0.0f;
+            for (int h = 0; h < NH; ++h) {
+                float fh = f_work * (float)(h + 1);
+                // Harmonic culling to avoid aliasing/harshness at high notes
+                if (fh > 0.45f * (float)SAMPLE_RATE) break;
+                float inc = twoPi * fh / (float)SAMPLE_RATE;
+                strings[s].phase[h] += inc;
+                if (strings[s].phase[h] > twoPi) strings[s].phase[h] -= twoPi;
+                string_sample += HARM[h] * sinf(strings[s].phase[h]);
+            }
+            sample += string_sample * strings[s].amp_current;
+
+            if (sample_debug_count < 3 && i < 5) {
+                printf("  s=%d f_target=%.1f f_cur=%.2f amp=%.3f\n", s, target_freq, strings[s].f_current, strings[s].amp_current);
+            }
+        }
+        
+        // Apply gentle low-pass filter
+        if (g_lpf_on) {
+            sample = lpf_process(lpf, sample);
+        }
+        
+        // Apply reverb
+        sample = reverb_process(rev, sample);
+        
+    // Convert to 32-bit by placing 16-bit sample in upper halfword (original method)
+    int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
+    int32_t s32 = ((int32_t)s16) << 16;
+        
+        // Debug: Print first few output samples
+        if (sample_debug_count < 3 && i < 5) {
+            printf("  sample[%zu]=%.3f -> s16=%d s32=0x%08lx\n", i, sample, s16, (unsigned long)s32);
+        }
+        
+        buf[i] = s32;
+    }
+    
+    if (sample_debug_count < 3) sample_debug_count++;
+}
+
+// Output task: generates audio buffer using violin synthesis
 void output(void *pvParameters) {
     allData *data = (allData *)pvParameters;
 
-    const int sample_rate = 16000; // 16 kHz is fine for testing
-    const int buffer_ms = 20; // buffer duration in ms
-    const int buf_samples = (sample_rate * buffer_ms) / 1000;
+    // Use fixed block size for smoother streaming (avoid timing gaps)
+    const int buf_samples = (int)FRAMES;
 
-    // Per-string phase accumulators
-    double phases[4] = {0};
+    // Initialize audio driver at 48 kHz (matching working code)
+    audio_driver_init(SAMPLE_RATE);
 
-    // Initialize audio driver (stub). Real driver will be wired later.
-    audio_driver_init(sample_rate);
-
-    int16_t *pcm = malloc(sizeof(int16_t) * buf_samples);
+    // Allocate audio buffer (mono, will be duplicated to stereo in driver)
+    int32_t *pcm = malloc(sizeof(int32_t) * buf_samples);
     if (!pcm) {
         printf("output: failed to allocate pcm buffer\n");
         vTaskDelete(NULL);
         return;
     }
 
+    // Initialize per-string state
+    StringState strings[4];
+    memset(strings, 0, sizeof(strings));
+    
+    // Initialize filters and effects
+    OnePoleLPF lpf = {0};
+    lpf_set_cutoff(&lpf, g_lpf_cut_hz);
+    
+    // Allocate reverb on heap (too large for stack - ~7KB)
+    ReverbSC *rev = malloc(sizeof(ReverbSC));
+    if (!rev) {
+        printf("output: failed to allocate reverb buffer\n");
+        free(pcm);
+        vTaskDelete(NULL);
+        return;
+    }
+    rev->enabled = false;
+    rev->mix = 0.25f;
+    rev->room = 0.82f;
+    rev->damp = 0.30f;
+    reverb_init(rev);
+
+    // Initialize vibrato and smoothing parameters
+    for (int s = 0; s < 4; s++) {
+        strings[s].vib_inc = (2.0f * (float)M_PI * g_vib_rate_hz) / (float)SAMPLE_RATE;
+        strings[s].f_current = 0.0f;
+        strings[s].amp_current = 0.0f;
+    }
+
+    uint32_t debug_frames = 0;
+    printf("output: Audio synthesis task started. Sample rate=%lu Hz block=%d\n", (unsigned long)SAMPLE_RATE, buf_samples);
+
     while (!data->end) {
-        // Update target frequencies
+        // Update target frequencies from position data
         noteConversion(data);
-
-        // Debug: print inputs and derived frequencies occasionally (once per second)
-        static int debug_tick = 0;
-        debug_tick++;
-        if (debug_tick >= (1000 / buffer_ms)) {
-            debug_tick = 0;
-            printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
-                   data->positions[0], data->positions[1], data->positions[2], data->positions[3],
-                   data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
-            printf("press: [%d, %d, %d, %d] bow: %.1f\n\n",
-                   data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
-                   data->bowSpeed);
-        }
-
-        // Simple per-buffer generation
-        for (int n = 0; n < buf_samples; n++) {
-            double sample = 0.0;
-
-            // Mix four strings
-            for (int s = 0; s < 4; s++) {
-                // Use pressure threshold as gate and normalize amplitude
-                double gate = (data->pressures[s] > 10) ? 1.0 : 0.0;
-                if (gate > 0) {
-                    double freq = data->stringsFreqs[s];
-                    // amplitude influenced by bowSpeed and pressure
-                    double amplitude = (data->bowSpeed / 100.0) * (data->pressures[s] / 1023.0);
-                    double incr = (2.0 * M_PI * freq) / (double)sample_rate;
-                    sample += amplitude * sin(phases[s]) * gate;
-                    phases[s] += incr;
-                    if (phases[s] > (2.0 * M_PI)) phases[s] -= (2.0 * M_PI);
-                }
+        
+        // Update string target frequencies
+        for (int s = 0; s < 4; s++) {
+            strings[s].f_target = data->stringsFreqs[s];
+            if (strings[s].f_current <= 0.0f) {
+                strings[s].f_current = strings[s].f_target; // seed first pass
             }
-
-            // Simple soft clipping and scale to int16
-            if (sample > 1.0) sample = 1.0;
-            if (sample < -1.0) sample = -1.0;
-            pcm[n] = (int16_t)(sample * 30000.0);
         }
 
-        // Send to audio driver (stub). In future this will write to I2S/codec.
-        // For diagnostics, print first few pcm samples occasionally
-        if (debug_tick == 0) {
-            int toprint = buf_samples < 8 ? buf_samples : 8;
-            printf("pcm[0..%d]:", toprint - 1);                         //TODO: figure out why this prints all zeros
-            for (int i = 0; i < toprint; ++i) printf(" %d", pcm[i]);
-            printf("\n");
+        // Debug: print inputs and derived frequencies occasionally
+        debug_frames++;
+        int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
+        float bowSpeed = (float)bow_milli / 1000.0f;
+
+        if (debug_frames % 50 == 0) { // periodic diagnostics
+            printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
+                data->positions[0], data->positions[1], data->positions[2], data->positions[3],
+                data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
+            printf("press: [%d, %d, %d, %d] bow: %.3f\n",
+                data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
+                bowSpeed);
         }
 
+        // Generate one block & write immediately (blocking maintains pacing)
+        fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev);
         audio_driver_write(pcm, buf_samples);
-
-        // Small delay -- buffer_ms worth of time
-        vTaskDelay(pdMS_TO_TICKS(buffer_ms));
     }
 
     free(pcm);
+    free(rev);
     audio_driver_deinit();
     vTaskDelete(NULL);
 }

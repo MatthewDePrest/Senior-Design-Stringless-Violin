@@ -38,12 +38,37 @@ static const char *TAG = "GPIO";
 
 
 
+/*
+// Minimal test (commented out): prints a heartbeat every second.
+// Uncomment for isolated serial/MCU checks.
+//
+void app_main(void)
+{
+    printf("[Core %d] Minimal test started!\n", xPortGetCoreID());
+    int ticks = 0;
+    while (1) {
+        printf("tick %d\n", ticks++);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+*/
+
 void app_main(void)
 {
     printf("[Core %d] Main app started!\n", xPortGetCoreID());
 
     allData data = {0};
     data.end = 0;
+
+    // Initialize sensors before starting the audio task to guarantee the
+    // audio task observes initialized values on its first run.
+
+    pressureSensor(&data);   //data.pressures = {20, 0, 0, 0};
+
+    touchSensor(&data);      //data.positions = {50, 60, 70, 80};
+
+    accelerometer(&data);    //data.bowSpeed = 100;
+
 
 // Create note conversion task pinned to Core 1
     BaseType_t result = xTaskCreatePinnedToCore(
@@ -60,15 +85,9 @@ void app_main(void)
         printf("Failed to create task.\n");
     }
 
-    pressureSensor(&data);   //data.pressures = {20, 0, 0, 0};
-    touchSensor(&data);      //data.positions = {50, 60, 70, 80};
-    accelerometer(&data);    //data.bowSpeed = 100;
-
-    // Print all values saved in allData
-    /*printf("Pressures: [%d, %d, %d, %d]\n", data.pressures[0], data.pressures[1], data.pressures[2], data.pressures[3]);
-    printf("Positions: [%.1f, %.1f, %.1f, %.1f]\n", data.positions[0], data.positions[1], data.positions[2], data.positions[3]);
-    printf("Bow Speed: %.1f\n", data.bowSpeed);
-    printf("\nOutputs: [%.1f Hz, %.1f Hz, %.1f Hz, %.1f Hz]\n\n", data.stringsFreqs[0], data.stringsFreqs[1], data.stringsFreqs[2], data.stringsFreqs[3]);*/
+    // Debug: confirm the atomic bow speed state after initialization
+    int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
+    printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
 
     
     gpio_config_t io_conf = {                   // maps pin bit mask to pin number
@@ -84,16 +103,17 @@ void app_main(void)
     // Main loop (Core 0)
     int count = 0;
     while (!data.end) {
-        int level = gpio_get_level(INPUT_PIN);                     
-        ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
+    int level = gpio_get_level(INPUT_PIN);                     
+    // Commented out: verbose GPIO logging
+    // ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
 
         touchSensor(&data);
 
         //printf("[Core %d] Main loop running...\n", xPortGetCoreID());
-        count++;
-        if (count > 5) data.end = 1;  // Stop after 5 loops for testing
+        //count++;
+        //if (count > 5) data.end = 1;  // Stop after 5 loops for testing
         vTaskDelay(pdMS_TO_TICKS(10)); //2000
     }
 
     vTaskDelete(NULL);
-} 
+}
