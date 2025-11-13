@@ -142,20 +142,13 @@ static inline float reverb_process(ReverbSC* rev, float x) {
     return (1.0f - rev->mix) * x + rev->mix * s; // wet/dry
 }
 
-// ---------- Per-String Note State (with smoothing) ----------
+// ---------- Per-String Note State ----------
 typedef struct {
-    float f_target;     // target frequency from mapping
-    float f_current;    // smoothed working frequency
-    float amp_target;   // target amplitude (pressure * bow)
-    float amp_current;  // smoothed amplitude
+    float f0;           // base frequency from mapping
     float vib_phase;    // vibrato phase accumulator
     float vib_inc;      // vibrato phase increment
     float phase[NH];    // harmonic phase accumulators
 } StringState;
-
-// Smoothing coefficients (0..1) smaller = slower glide
-static const float FREQ_GLIDE_COEF = 0.02f;   // frequency portamento per sample
-static const float AMP_GLIDE_COEF  = 0.05f;   // amplitude smoothing per sample
 
 // ---------- Helper Functions ----------
 static inline float cents_to_ratio(float cents) {
@@ -176,31 +169,26 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
     for (size_t i = 0; i < frames; ++i) {
         float sample = 0.0f;
         
-        // Mix all 4 strings with smoothing
+        // Mix all 4 strings (matching working code: no per-sample smoothing)
         for (int s = 0; s < 4; s++) {
-            // Determine target freq & amp (even if pressure low we glide down rather than abrupt mute)
-            float target_freq = strings[s].f_target;
-            float press_gate = (data->pressures[s] > 10) ? 1.0f : 0.0f;
-            float target_amp = press_gate * (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
-
-            // Glide frequency & amplitude
-            strings[s].f_current += FREQ_GLIDE_COEF * (target_freq - strings[s].f_current);
-            strings[s].amp_current += AMP_GLIDE_COEF * (target_amp - strings[s].amp_current);
-
-            // Skip if nearly silent
-            if (strings[s].amp_current < 0.0005f) continue;
-
-            float f_work = strings[s].f_current;
+            // Use pressure threshold as gate
+            if (data->pressures[s] <= 10) continue;
+            
+            float f0 = strings[s].f0;
+            
+            // Apply vibrato to base frequency
+            float f = f0;
             if (g_vibrato_on) {
                 float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
                 strings[s].vib_phase += strings[s].vib_inc;
                 if (strings[s].vib_phase > twoPi) strings[s].vib_phase -= twoPi;
-                f_work *= cents_to_ratio(cents);
+                f *= cents_to_ratio(cents);
             }
-
+            
+            // Generate harmonics for this string
             float string_sample = 0.0f;
             for (int h = 0; h < NH; ++h) {
-                float fh = f_work * (float)(h + 1);
+                float fh = f * (float)(h + 1);
                 // Harmonic culling to avoid aliasing/harshness at high notes
                 if (fh > 0.45f * (float)SAMPLE_RATE) break;
                 float inc = twoPi * fh / (float)SAMPLE_RATE;
@@ -208,10 +196,13 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 if (strings[s].phase[h] > twoPi) strings[s].phase[h] -= twoPi;
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
-            sample += string_sample * strings[s].amp_current;
-
+            
+            // Amplitude influenced by bowSpeed and pressure (matching working code)
+            float amplitude = (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
+            sample += string_sample * amplitude;
+            
             if (sample_debug_count < 3 && i < 5) {
-                printf("  s=%d f_target=%.1f f_cur=%.2f amp=%.3f\n", s, target_freq, strings[s].f_current, strings[s].amp_current);
+                printf("  s=%d f0=%.1f amp=%.3f str_samp=%.3f\n", s, f0, amplitude, string_sample);
             }
         }
         
@@ -278,11 +269,9 @@ void output(void *pvParameters) {
     rev->damp = 0.30f;
     reverb_init(rev);
 
-    // Initialize vibrato and smoothing parameters
+    // Initialize vibrato parameters for all strings
     for (int s = 0; s < 4; s++) {
         strings[s].vib_inc = (2.0f * (float)M_PI * g_vib_rate_hz) / (float)SAMPLE_RATE;
-        strings[s].f_current = 0.0f;
-        strings[s].amp_current = 0.0f;
     }
 
     uint32_t debug_frames = 0;
@@ -292,12 +281,9 @@ void output(void *pvParameters) {
         // Update target frequencies from position data
         noteConversion(data);
         
-        // Update string target frequencies
+        // Update string frequencies
         for (int s = 0; s < 4; s++) {
-            strings[s].f_target = data->stringsFreqs[s];
-            if (strings[s].f_current <= 0.0f) {
-                strings[s].f_current = strings[s].f_target; // seed first pass
-            }
+            strings[s].f0 = data->stringsFreqs[s];
         }
 
         // Debug: print inputs and derived frequencies occasionally
