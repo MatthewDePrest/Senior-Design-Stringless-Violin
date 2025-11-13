@@ -28,4 +28,35 @@ app.post('/save-notes', (req, res) => {
   });
 });
 
+// Clear notes.txt
+app.delete('/live/notes.txt', (req, res) => {
+  const filePath = path.join(LIVE_DIR, 'notes.txt');
+  fs.writeFile(filePath, '', (err) => {
+    if (err) {
+      console.error('Error clearing notes.txt:', err);
+      return res.status(500).send('Failed to clear notes.txt');
+    }
+    res.send('notes.txt cleared successfully');
+  });
+});
+
+// Save violin frequencies to a .txt file
+app.post('/save-frequencies', (req, res) => {
+  const frequencies = req.body;
+
+  const fileContent =
+    `${frequencies.First}.0\n` +
+    `${frequencies.Second}.0\n` +
+    `${frequencies.Third}.0\n` +
+    `${frequencies.Fourth}.0\n`;
+
+  fs.writeFile('violin_frequencies.txt', fileContent, (err) => {
+    if (err) {
+      console.error('Error writing file:', err);
+      return res.status(500).send('Error saving file');
+    }
+    res.send('File saved successfully');
+  });
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -77,7 +77,9 @@ function LearningTools({ onBack }) {
                 measureGroups.push(group.slice(i, i + NOTES_PER_MEASURE));
             }
 
-            const measureWidth = STAVE_WIDTH / measureGroups.length;
+            // const measureWidth = STAVE_WIDTH / measureGroups.length;
+            const expectedMeasuresPerLine = NOTES_PER_LINE / NOTES_PER_MEASURE;
+            const measureWidth = STAVE_WIDTH / expectedMeasuresPerLine;
 
             measureGroups.forEach((measure, measureIndex) => {
                 const xStart = 10 + measureWidth * measureIndex;
@@ -109,26 +111,15 @@ function LearningTools({ onBack }) {
                         if (s) note.addModifier(new Accidental("#"), i);
                     });
 
-                    // Determine note color
-                    // if (n.isCorrect) {
-                    //     note.setStyle({ fillStyle: "green", strokeStyle: "green" }); // correct
-                    // } else if (n.keys.length > 1) {
-                    //     // if there’s a live note that doesn’t match preset
-                    //     note.setStyle({ fillStyle: "red", strokeStyle: "red" }); // wrong
-                    // } else {
-                    //     // note hasn’t been played yet
-                    //     note.setStyle({ fillStyle: "black", strokeStyle: "black" }); // default
-                    // }
                     if (n.keys.length > 1) {
-                        note.setKeyStyle(0, { fillStyle: "blue", strokeStyle: "blue" });   // preset
-                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });     // live (wrong)
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // preset
+                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });      // live (wrong)
                         note.setStemStyle({ strokeStyle: "red" });
                     } else if (n.isCorrect) {
-                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" }); // correct
+                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" });  // correct
                         note.setStemStyle({ strokeStyle: "green" });
                     } else {
-                    // Default
-                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" }); // unplayed
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // unplayed
                         note.setStemStyle({ strokeStyle: "black" });
                     }
 
@@ -189,9 +180,17 @@ function LearningTools({ onBack }) {
         setInput("");
     };
 
-    const handleClear = () => {
+    const handleClear = async () => {
         setPresetNotes([]);
         setIncomingNotes([]);
+
+        try {
+            await fetch("http://localhost:5000/live/notes.txt", {
+                method: "DELETE",
+            });
+        } catch (err) {
+            console.error("Failed to clear notes.txt", err);
+        }
     };
 
     const loadPreset = async (file) => {
@@ -229,13 +228,18 @@ function LearningTools({ onBack }) {
             <h2>Learning Tools</h2>
 
             <div style={{ marginBottom: "20px" }}>
-                <button onClick={() => loadPreset("preset1.txt")}>Preset 1</button>
-                <button onClick={() => loadPreset("preset2.txt")} style={{ marginLeft: "10px" }}>
-                    Preset 2
+                <button onClick={() => loadPreset("octaves.txt")}>
+                    Octave Scale
+                </button>
+                <button onClick={() => loadPreset("jingle-bells.txt")} style={{ marginLeft: "10px" }}>
+                    Jingle Bells
+                </button>
+                <button onClick={() => loadPreset("hot-cross-buns.txt")} style={{ marginLeft: "10px" }}>
+                    Hot Cross Buns
                 </button>
             </div>
 
-            <p>Enter a note (A–G, optional #, then octave):</p>
+            <p>Add additional notes (A–G, optional #, then octave):</p>
             <input
                 type="text"
                 value={input}
