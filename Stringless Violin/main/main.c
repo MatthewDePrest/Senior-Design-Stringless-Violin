@@ -2,6 +2,7 @@
 #include "driver/gpio.h"
 #include <stdio.h>
 #include <inttypes.h>
+#include "mpu6050.h"
 // Include the generated SDK config so CONFIG_* macros (like CONFIG_FREERTOS_HZ)
 // are defined for FreeRTOS macros such as pdMS_TO_TICKS.
 #include "sdkconfig.h"
@@ -56,6 +57,7 @@ void app_main(void)
 void app_main(void)
 {
     printf("[Core %d] Main app started!\n", xPortGetCoreID());
+    mpu6050_init();
 
     allData data = {0};
     data.end = 0;
@@ -88,7 +90,8 @@ void app_main(void)
     // Debug: confirm the atomic bow speed state after initialization
     int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
     printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
-
+    
+    
     
     gpio_config_t io_conf = {                   // maps pin bit mask to pin number
         .pin_bit_mask = 1ULL << INPUT_PIN,
@@ -99,20 +102,24 @@ void app_main(void)
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));
     ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
-
+    MPU6050_Data imu;
+    
     // Main loop (Core 0)
     int count = 0;
     while (!data.end) {
     int level = gpio_get_level(INPUT_PIN);                     
     // Commented out: verbose GPIO logging
     // ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
-
+        mpu6050_read(&imu);
+        printf("Accel: %.2f, %.2f, %.2f g\n", imu.ax, imu.ay, imu.az);
+        printf("Gyro: %.2f, %.2f, %.2f °/s\n", imu.gx, imu.gy, imu.gz);
+        // printf("Temp: %.2f °C\n", imu.temp);
         touchSensor(&data);
 
         //printf("[Core %d] Main loop running...\n", xPortGetCoreID());
         //count++;
         //if (count > 5) data.end = 1;  // Stop after 5 loops for testing
-        vTaskDelay(pdMS_TO_TICKS(10)); //2000
+        vTaskDelay(pdMS_TO_TICKS(1000)); //2000
     }
 
     vTaskDelete(NULL);
