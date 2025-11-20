@@ -19,5 +19,8 @@
   "idf.flashType": "UART",
   "idf.portWin": "COM9",
   "idf.espIdfPathWin": "d:\\SeniorDesign\\ESP32\\container\\v5.3.4\\esp-idf",
-  "idf.toolsPathWin": "d:\\SeniorDesign"
+  "idf.toolsPathWin": "d:\\SeniorDesign",
+  "files.associations": {
+    "compare": "c"
+  }
 }

@@ -57,7 +57,6 @@ void app_main(void)
 void app_main(void)
 {
     printf("[Core %d] Main app started!\n", xPortGetCoreID());
-    mpu6050_init();
 
     allData data = {0};
     data.end = 0;
@@ -70,6 +69,7 @@ void app_main(void)
     touchSensor(&data);      //data.positions = {50, 60, 70, 80};
 
     accelerometer(&data);    //data.bowSpeed = 100;
+    mpu6050_init();
 
 
 // Create note conversion task pinned to Core 1
