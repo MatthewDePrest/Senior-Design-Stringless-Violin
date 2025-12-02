@@ -7,8 +7,9 @@ static const char *TAG = "MPU6050";
 
 #define MPU6050_ADDR 0x68
 #define MPU6050_I2C_PORT I2C_NUM_1
-#define MPU6050_SCL_PIN 20
-#define MPU6050_SDA_PIN 21
+#define MPU6050_SCL_PIN 12    // not GPIO4/6
+#define MPU6050_SDA_PIN 11    // not GPIO4/6
+// ...existing code...
 
 #define MPU6050_REG_WHOAMI 0x75
 #define MPU6050_REG_PWR_MGMT_1 0x6B

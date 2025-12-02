@@ -3,8 +3,9 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include "mpu6050.h"
-// Include the generated SDK config so CONFIG_* macros (like CONFIG_FREERTOS_HZ)
-// are defined for FreeRTOS macros such as pdMS_TO_TICKS.
+#include "distance_calc.h"
+#include "esp_now_reciever.h"   // <-- Add this line
+
 #include "sdkconfig.h"
 // Provide fallbacks for static analysis/builds where sdkconfig.h isn't
 // available or the CONFIG_FREERTOS_HZ macro isn't defined. These
@@ -70,7 +71,7 @@ void app_main(void)
 
     accelerometer(&data);    //data.bowSpeed = 100;
     mpu6050_init();
-
+    esp_now_receiver_init();
 
 // Create note conversion task pinned to Core 1
     BaseType_t result = xTaskCreatePinnedToCore(
@@ -107,12 +108,13 @@ void app_main(void)
     // Main loop (Core 0)
     int count = 0;
     while (!data.end) {
-    int level = gpio_get_level(INPUT_PIN);                     
+        update_local_imu();
+
+        int level = gpio_get_level(INPUT_PIN);                     
     // Commented out: verbose GPIO logging
     // ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
-        mpu6050_read(&imu);
-        printf("Accel: %.2f, %.2f, %.2f g\n", imu.ax, imu.ay, imu.az);
-        printf("Gyro: %.2f, %.2f, %.2f °/s\n", imu.gx, imu.gy, imu.gz);
+        float dist = calculate_distance(get_local_imu(), get_remote_imu());
+        printf("Distance (accel vector): %.2f\n", dist);    
         // printf("Temp: %.2f °C\n", imu.temp);
         touchSensor(&data);
 

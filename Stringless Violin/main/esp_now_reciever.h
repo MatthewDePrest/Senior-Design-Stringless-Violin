@@ -1,10 +1,11 @@
-#ifndef MAIN_ESP_NOW_RECEIVER_H
-#define MAIN_ESP_NOW_RECEIVER_H
+#ifndef ESP_NOW_RECIEVER_H
+#define ESP_NOW_RECIEVER_H
 
-// Initialize ESP-NOW receiver (call once from app_main)
+#include "main.h"
+
 void esp_now_receiver_init(void);
+void update_local_imu(void);
+ImuPacket* get_remote_imu(void);
+ImuPacket* get_local_imu(void);
 
-// Stop ESP-NOW
-void esp_now_receiver_deinit(void);
-
-#endif // MAIN_ESP_NOW_RECEIVER_H
+#endif

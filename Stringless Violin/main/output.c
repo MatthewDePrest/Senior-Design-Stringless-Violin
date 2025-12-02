@@ -291,7 +291,7 @@ void output(void *pvParameters) {
         int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
         float bowSpeed = (float)bow_milli / 1000.0f;
 
-        if (debug_frames % 200 == 0) { // periodic diagnostics
+        if (debug_frames % 10000 == 0) { // periodic diagnostics
             printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
                 data->positions[0], data->positions[1], data->positions[2], data->positions[3],
                 data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
