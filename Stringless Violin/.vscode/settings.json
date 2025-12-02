@@ -1,7 +1,7 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
   "idf.espIdfPath": "/home/shay/a/ofortman/esp/v5.3.4/esp-idf",
-  "idf.pythonInstallPath": "C:\\Users\\Oliver\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.pythonInstallPath": "d:\\SeniorDesign\\tools\\idf-python\\3.11.2\\python.exe",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
@@ -17,5 +17,13 @@
     "--compile-commands-dir=${workspaceFolder}/build"
   ],
   "idf.flashType": "UART",
-  "idf.portWin": "COM5"
+  "idf.portWin": "COM9",
+  "idf.espIdfPathWin": "d:\\SeniorDesign\\ESP32\\container\\v5.3.4\\esp-idf",
+  "idf.toolsPathWin": "d:\\SeniorDesign",
+  "files.associations": {
+    "compare": "c",
+    "distance_calc.h": "c",
+    "esp_now_reciever.h": "c",
+    "main.h": "c"
+  }
 }

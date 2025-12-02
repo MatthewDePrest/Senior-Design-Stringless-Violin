@@ -2,8 +2,10 @@
 #include "driver/gpio.h"
 #include <stdio.h>
 #include <inttypes.h>
-// Include the generated SDK config so CONFIG_* macros (like CONFIG_FREERTOS_HZ)
-// are defined for FreeRTOS macros such as pdMS_TO_TICKS.
+#include "mpu6050.h"
+#include "distance_calc.h"
+#include "esp_now_reciever.h"   // <-- Add this line
+
 #include "sdkconfig.h"
 // Provide fallbacks for static analysis/builds where sdkconfig.h isn't
 // available or the CONFIG_FREERTOS_HZ macro isn't defined. These
@@ -68,7 +70,8 @@ void app_main(void)
     touchSensor(&data);      //data.positions = {50, 60, 70, 80};
 
     accelerometer(&data);    //data.bowSpeed = 100;
-
+    mpu6050_init();
+    esp_now_receiver_init();
 
 // Create note conversion task pinned to Core 1
     BaseType_t result = xTaskCreatePinnedToCore(
@@ -88,7 +91,8 @@ void app_main(void)
     // Debug: confirm the atomic bow speed state after initialization
     int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
     printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
-
+    
+    
     
     gpio_config_t io_conf = {                   // maps pin bit mask to pin number
         .pin_bit_mask = 1ULL << INPUT_PIN,
@@ -99,20 +103,25 @@ void app_main(void)
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));
     ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
-
+    MPU6050_Data imu;
+    
     // Main loop (Core 0)
     int count = 0;
     while (!data.end) {
-    int level = gpio_get_level(INPUT_PIN);                     
+        update_local_imu();
+
+        int level = gpio_get_level(INPUT_PIN);                     
     // Commented out: verbose GPIO logging
     // ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
-
+        float dist = calculate_distance(get_local_imu(), get_remote_imu());
+        printf("Distance (accel vector): %.2f\n", dist);    
+        // printf("Temp: %.2f °C\n", imu.temp);
         touchSensor(&data);
 
         //printf("[Core %d] Main loop running...\n", xPortGetCoreID());
         //count++;
         //if (count > 5) data.end = 1;  // Stop after 5 loops for testing
-        vTaskDelay(pdMS_TO_TICKS(10)); //2000
+        vTaskDelay(pdMS_TO_TICKS(1000)); //2000
     }
 
     vTaskDelete(NULL);
