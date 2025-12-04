@@ -1,29 +1,24 @@
 {
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.espIdfPath": "/home/shay/a/ofortman/esp/v5.3.4/esp-idf",
-  "idf.pythonInstallPath": "d:\\SeniorDesign\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.espIdfPathWin": "d:\\SeniorDesign\\v5.5.1\\esp-idf",
+  "idf.toolsPathWin": "d:\\SeniorDesign\\5.5",
+  "idf.pythonInstallPath": "d:\\SeniorDesign\\5.5\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.portWin": "COM9",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
-  "idf.port": "/dev/ttyS10",
-  "idf.toolsPath": "/home/shay/a/ofortman/.espressif",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
-  "clangd.path": "/home/shay/a/ofortman/.espressif/tools/esp-clang/16.0.1-fe4f10a809/esp-clang/bin/clangd",
+  "clangd.path": "d:\\SeniorDesign\\tools\\esp-clang\\16.0.1-fe4f10a809\\esp-clang\\bin\\clangd.exe",
   "clangd.arguments": [
     "--background-index",
-    "--query-driver=/home/shay/a/ofortman/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc",
-    "--compile-commands-dir=${workspaceFolder}/build"
+    "--query-driver=d:\\SeniorDesign\\tools\\xtensa-esp-elf\\esp-13.2.0_20240530\\xtensa-esp-elf\\bin\\xtensa-esp32s3-elf-gcc.exe",
+    "--compile-commands-dir=d:\\SeniorDesign\\GroupGit\\Senior-Design-Stringless-Violin\\Stringless Violin\\build"
   ],
   "idf.flashType": "UART",
-  "idf.portWin": "COM9",
-  "idf.espIdfPathWin": "d:\\SeniorDesign\\ESP32\\container\\v5.3.4\\esp-idf",
-  "idf.toolsPathWin": "d:\\SeniorDesign",
   "files.associations": {
-    "compare": "c",
-    "distance_calc.h": "c",
-    "esp_now_reciever.h": "c",
-    "main.h": "c"
+    "main.h": "c",
+    "audio_driver.h": "c",
+    "esp_now_reciever.h": "c"
   }
 }

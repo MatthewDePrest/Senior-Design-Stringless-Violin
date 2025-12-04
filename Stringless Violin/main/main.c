@@ -37,7 +37,8 @@
 #define OUTPUT_PIN  GPIO_NUM_5
 
 static const char *TAG = "GPIO";
-
+static uint32_t s_last_remote_update_tick = 0;
+static bool s_remote_connected = false;
 
 
 /*
@@ -58,43 +59,38 @@ void app_main(void)
 void app_main(void)
 {
     printf("[Core %d] Main app started!\n", xPortGetCoreID());
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    printf("[S3 MAC Address] %02X:%02X:%02X:%02X:%02X:%02X\n", 
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     allData data = {0};
-    data.end = 0;
+    data.end = 0;   
 
-    // Initialize sensors before starting the audio task to guarantee the
-    // audio task observes initialized values on its first run.
-
-    pressureSensor(&data);   //data.pressures = {20, 0, 0, 0};
-
-    touchSensor(&data);      //data.positions = {50, 60, 70, 80};
-
-    accelerometer(&data);    //data.bowSpeed = 100;
-    mpu6050_init();
+    pressureSensor(&data);
+    touchSensor(&data);
+    accelerometer(&data);
+    // mpu6050_init();
     esp_now_receiver_init();
-
-// Create note conversion task pinned to Core 1
+    
     BaseType_t result = xTaskCreatePinnedToCore(
-        output,               // Task function
-        "Audio output",       // Name
-        8192,                 // Stack size in bytes
-        &data,                // Parameters
-        1,                    // Priority
-        NULL,                 // Task handle (optional)
-        1                     // Core 1
+        output,
+        "Audio output",
+        8192,
+        &data,
+        1,
+        NULL,
+        1
     );
 
     if (result != pdPASS) {
         printf("Failed to create task.\n");
     }
 
-    // Debug: confirm the atomic bow speed state after initialization
     int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
     printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
-    
-    
-    
-    gpio_config_t io_conf = {                   // maps pin bit mask to pin number
+
+    gpio_config_t io_conf = {
         .pin_bit_mask = 1ULL << INPUT_PIN,
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
@@ -103,25 +99,45 @@ void app_main(void)
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));
     ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
-    MPU6050_Data imu;
-    
+
     // Main loop (Core 0)
-    int count = 0;
+    uint32_t loop_count = 0;
     while (!data.end) {
         update_local_imu();
+        int level = gpio_get_level(INPUT_PIN);
 
-        int level = gpio_get_level(INPUT_PIN);                     
-    // Commented out: verbose GPIO logging
-    // ESP_LOGI(TAG, "GPIO%d level: %d", INPUT_PIN, level);       // Read and log the GPIO level
-        float dist = calculate_distance(get_local_imu(), get_remote_imu());
-        printf("Distance (accel vector): %.2f\n", dist);    
-        // printf("Temp: %.2f °C\n", imu.temp);
+        ImuPacket *local = get_local_imu();
+        ImuPacket *remote = get_remote_imu();
+        
+        // Check if remote data has been updated
+        uint32_t now = xTaskGetTickCount();
+        static uint32_t last_check = 0;
+        
+        // Detect new data from ESP-XIAO by checking if remote gyro changed
+        if (remote->imu.gx != 0.0f || remote->imu.gy != 0.0f || remote->imu.gz != 0.0f) {
+            if (now != s_last_remote_update_tick) {
+                s_last_remote_update_tick = now;
+                s_remote_connected = true;
+            }
+        }
+
+        float dist = calculate_distance(local, remote);
+
+        // Print connectivity status every 5 seconds (5000 ms / 1000 ms = 5 loops)
+        if (loop_count % 5 == 0) {
+            if (s_remote_connected) {
+                printf("[CONNECTED] Distance: %.2f | Local Gyro: [%.2f, %.2f, %.2f] | Remote Gyro: [%.2f, %.2f, %.2f]\n",
+                       dist,
+                       local->imu.gx, local->imu.gy, local->imu.gz,
+                       remote->imu.gx, remote->imu.gy, remote->imu.gz);
+            } else {
+                printf("[DISCONNECTED] Waiting for ESP32-XIAO...\n");
+            }
+        }
+
         touchSensor(&data);
-
-        //printf("[Core %d] Main loop running...\n", xPortGetCoreID());
-        //count++;
-        //if (count > 5) data.end = 1;  // Stop after 5 loops for testing
-        vTaskDelay(pdMS_TO_TICKS(1000)); //2000
+        loop_count++;
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
     vTaskDelete(NULL);

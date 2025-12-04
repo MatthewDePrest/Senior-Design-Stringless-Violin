@@ -1,6 +1,4 @@
 // Violin-style synth with harmonics, vibrato, low-pass, and reverb.
-// Integrates with allData struct for pressure, position, and bow speed control.
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
@@ -8,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "audio_driver.h"
+#include "esp_now_reciever.h"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -36,6 +35,16 @@ typedef struct {
     float y;
 } OnePoleLPF;
 
+static inline float accel_x_only(const MPU6050_Data *imu) {
+    float ax = fabsf(imu->ax);
+    
+    // Apply deadzone: ignore small movements (sensor noise ~0.05g)
+    if (ax < 0.5f) {
+        return 0.0f;
+    }
+    
+    return ax;
+}
 static void lpf_set_cutoff(OnePoleLPF* lpf, float fc_hz) {
     float a_ = expf(-2.0f * (float)M_PI * fc_hz / (float)SAMPLE_RATE);
     lpf->a = fminf(fmaxf(a_, 0.0f), 0.9999f);
@@ -156,28 +165,38 @@ static inline float cents_to_ratio(float cents) {
 }
 
 // Fill one audio block with violin synthesis for all 4 strings
+// Fill one audio block with violin synthesis for all 4 strings
 static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data, 
-                                StringState* strings, OnePoleLPF* lpf, ReverbSC* rev) {
+                                StringState* strings, OnePoleLPF* lpf, ReverbSC* rev,
+                                const MPU6050_Data *remote_imu) {
     const float twoPi = 2.0f * (float)M_PI;
     
-    // Snapshot atomic bowSpeed for this buffer
     int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
     float bowSpeed = (float)bow_milli / 1000.0f;
     
-    static int sample_debug_count = 0;
+    // Get X-axis acceleration with deadzone applied
+    float accel_x = accel_x_only(remote_imu);
+    
+    // Debug print every 100 buffers (~5 sec)
+    static int debug_count = 0;
+    if (debug_count % 100 == 0) {
+        printf("[VOLUME] accel_x=%.3f (raw: %.3f) bowSpeed=%.3f accel_vol=%.3f\n", 
+               accel_x, remote_imu->ax, bowSpeed, fminf(accel_x / 3.0f, 1.0f));
+    }
+    debug_count++;
+    
+    // Normalize 0-3g to 0-1, clamp at 1
+    float accel_volume = fminf(accel_x / 3.0f, 1.0f);
     
     for (size_t i = 0; i < frames; ++i) {
         float sample = 0.0f;
         
-        // Mix all 4 strings (matching working code: no per-sample smoothing)
         for (int s = 0; s < 4; s++) {
-            // Use pressure threshold as gate
             if (data->pressures[s] <= 10) continue;
             
             float f0 = strings[s].f0;
-            
-            // Apply vibrato to base frequency
             float f = f0;
+            
             if (g_vibrato_on) {
                 float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
                 strings[s].vib_phase += strings[s].vib_inc;
@@ -185,11 +204,9 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 f *= cents_to_ratio(cents);
             }
             
-            // Generate harmonics for this string
             float string_sample = 0.0f;
             for (int h = 0; h < NH; ++h) {
                 float fh = f * (float)(h + 1);
-                // Harmonic culling to avoid aliasing/harshness at high notes
                 if (fh > 0.45f * (float)SAMPLE_RATE) break;
                 float inc = twoPi * fh / (float)SAMPLE_RATE;
                 strings[s].phase[h] += inc;
@@ -197,38 +214,23 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
             
-            // Amplitude influenced by bowSpeed and pressure (matching working code)
-            float amplitude = (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
+            // Volume = (accel × bow speed × pressure)
+            // If accel_x=0 (below threshold), amplitude stays 0 → silent
+            float amplitude = accel_volume * (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
             sample += string_sample * amplitude;
-            
-            if (sample_debug_count < 3 && i < 5) {
-                printf("  s=%d f0=%.1f amp=%.3f str_samp=%.3f\n", s, f0, amplitude, string_sample);
-            }
         }
         
-        // Apply gentle low-pass filter
         if (g_lpf_on) {
             sample = lpf_process(lpf, sample);
         }
         
-        // Apply reverb
         sample = reverb_process(rev, sample);
         
-    // Convert to 32-bit by placing 16-bit sample in upper halfword (original method)
-    int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
-    int32_t s32 = ((int32_t)s16) << 16;
-        
-        // Debug: Print first few output samples
-        if (sample_debug_count < 3 && i < 5) {
-            printf("  sample[%zu]=%.3f -> s16=%d s32=0x%08lx\n", i, sample, s16, (unsigned long)s32);
-        }
-        
+        int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
+        int32_t s32 = ((int32_t)s16) << 16;
         buf[i] = s32;
     }
-    
-    if (sample_debug_count < 3) sample_debug_count++;
 }
-
 // Output task: generates audio buffer using violin synthesis
 void output(void *pvParameters) {
     allData *data = (allData *)pvParameters;
@@ -301,7 +303,9 @@ void output(void *pvParameters) {
         }
 
         // Generate one block & write immediately (blocking maintains pacing)
-        fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev);
+        // NOW PASSES remote IMU to fill_violin_buffer
+        ImuPacket *remote = get_remote_imu();
+        fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev, &remote->imu);
         audio_driver_write(pcm, buf_samples);
     }
 
