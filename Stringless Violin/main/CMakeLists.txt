@@ -10,6 +10,7 @@ idf_component_register(
         "output.c"
         "pressureSensor.c"
         "touchSensor.c"
+        "bluetooth_receiver.c"
     INCLUDE_DIRS 
         "."
 )
