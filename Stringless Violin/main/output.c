@@ -239,7 +239,7 @@ const char* frequencyToNote(float freq) {
     int noteIndex = midi % 12;
     int octave = midi / 12 - 1;
 
-    static char note[4];  // Enough space for note like "A4", "C#5", etc.
+    static char note[40];  // Enough space for note like "A4", "C#5", etc.
     snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
     return note;
 }
@@ -259,9 +259,17 @@ const char* getNoteFromPressureAndFreq(float* freqs, int* pressures) {
 }
 
 void appendNoteToFile(const char* note) {
-    const char* filePath = "/App/live/notes.txt";
+    // const char* filePath = "testpath.txt";
+    const char* filePath = "D:/SeniorDesign/GroupGit/Senior-Design-Stringless-Violin/App/live/notes.txt";
 
-    FILE* file = fopen(filePath, "a");
+    char absPath[4096];
+    if (realpath(filePath, absPath) != NULL) {
+        printf("Absolute file path: %s\n", absPath);
+    }// else {
+    //     printf("Error resolving absolute path for %s\n", filePath);
+    // }
+
+    FILE* file = fopen(absPath, "a");
     if (file == NULL) {
         printf("Error opening file for appending.\n");
         return;
@@ -334,7 +342,7 @@ void output(void *pvParameters) {
         int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
         float bowSpeed = (float)bow_milli / 500.0f;
 
-        if (debug_frames % 10000 == 0) { // periodic diagnostics
+        if (debug_frames % 1000 == 0) { // periodic diagnostics
             printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
                 data->positions[0], data->positions[1], data->positions[2], data->positions[3],
                 data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
