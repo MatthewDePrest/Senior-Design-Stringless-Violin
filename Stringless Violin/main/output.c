@@ -1,4 +1,6 @@
 // Violin-style synth with harmonics, vibrato, low-pass, and reverb.
+// Integrates with allData struct for pressure, position, and bow speed control.
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
@@ -6,16 +8,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "audio_driver.h"
-#include "esp_now_reciever.h"
 #ifndef M_PI
-#define M_PI 3.1415
+#define M_PI 3.14159265358979323846
 #endif
 
 // ---------- Audio Configuration ----------
 static const uint32_t SAMPLE_RATE = 48000;
-static const size_t FRAMES = 100; // used to be 256 small block for smoother streaming
+static const size_t FRAMES = 256; // small block for smoother streaming
 static int VOLUME_Q15 = 1200;
-static float g_bow_velocity_sensitivity = 4.0f;  // 0.0 = no effect, 1.0 = normal, 2.0 = doubled sensitivity
 
 // Violin-ish harmonic profile (fundamental + 5 harmonics)
 static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
@@ -28,7 +28,7 @@ static float g_vib_depth_cents = 12.0f;
 
 // Gentle 1-pole low-pass "bow" tone
 static bool g_lpf_on = true;
-static float g_lpf_cut_hz = 2000.0f; // prev 4500
+static float g_lpf_cut_hz = 4500.0f;
 
 // ---------- 1-pole Low-Pass Filter ----------
 typedef struct {
@@ -36,16 +36,6 @@ typedef struct {
     float y;
 } OnePoleLPF;
 
-static inline float accel_x_only(const MPU6050_Data *imu) {
-    float ax = fabsf(imu->ax);
-    
-    // Apply deadzone: ignore small movements (sensor noise ~0.05g)
-    if (ax < 0.02f) {
-        return 0.0f;
-    }
-    
-    return ax;
-}
 static void lpf_set_cutoff(OnePoleLPF* lpf, float fc_hz) {
     float a_ = expf(-2.0f * (float)M_PI * fc_hz / (float)SAMPLE_RATE);
     lpf->a = fminf(fmaxf(a_, 0.0f), 0.9999f);
@@ -166,30 +156,28 @@ static inline float cents_to_ratio(float cents) {
 }
 
 // Fill one audio block with violin synthesis for all 4 strings
-// Fill one audio block with violin synthesis for all 4 strings
 static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data, 
-                                StringState* strings, OnePoleLPF* lpf, ReverbSC* rev,
-                                const MPU6050_Data *remote_imu) {
+                                StringState* strings, OnePoleLPF* lpf, ReverbSC* rev) {
     const float twoPi = 2.0f * (float)M_PI;
     
+    // Snapshot atomic bowSpeed for this buffer
     int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
     float bowSpeed = (float)bow_milli / 1000.0f;
     
-    // Get X-axis acceleration with deadzone applied
-    float accel_x = accel_x_only(remote_imu);
-    
-    // Apply sensitivity multiplier, then normalize 0-3g to 0-1, clamp at 1
-    float accel_volume = fminf((accel_x * g_bow_velocity_sensitivity) / 3.0f, 1.0f);
+    static int sample_debug_count = 0;
     
     for (size_t i = 0; i < frames; ++i) {
         float sample = 0.0f;
         
+        // Mix all 4 strings (matching working code: no per-sample smoothing)
         for (int s = 0; s < 4; s++) {
+            // Use pressure threshold as gate
             if (data->pressures[s] <= 10) continue;
             
             float f0 = strings[s].f0;
-            float f = f0;
             
+            // Apply vibrato to base frequency
+            float f = f0;
             if (g_vibrato_on) {
                 float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
                 strings[s].vib_phase += strings[s].vib_inc;
@@ -197,9 +185,11 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 f *= cents_to_ratio(cents);
             }
             
+            // Generate harmonics for this string
             float string_sample = 0.0f;
             for (int h = 0; h < NH; ++h) {
                 float fh = f * (float)(h + 1);
+                // Harmonic culling to avoid aliasing/harshness at high notes
                 if (fh > 0.45f * (float)SAMPLE_RATE) break;
                 float inc = twoPi * fh / (float)SAMPLE_RATE;
                 strings[s].phase[h] += inc;
@@ -207,22 +197,81 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
             
-            // Volume = (accel_with_sensitivity × bow speed × pressure)
-            float amplitude = accel_volume * (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
+            // Amplitude influenced by bowSpeed and pressure (matching working code)
+            float amplitude = (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
             sample += string_sample * amplitude;
+            
+            if (sample_debug_count < 3 && i < 5) {
+                printf("  s=%d f0=%.1f amp=%.3f str_samp=%.3f\n", s, f0, amplitude, string_sample);
+            }
         }
         
+        // Apply gentle low-pass filter
         if (g_lpf_on) {
             sample = lpf_process(lpf, sample);
         }
         
+        // Apply reverb
         sample = reverb_process(rev, sample);
         
-        int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
-        int32_t s32 = ((int32_t)s16) << 16;
+    // Convert to 32-bit by placing 16-bit sample in upper halfword (original method)
+    int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
+    int32_t s32 = ((int32_t)s16) << 16;
+        
+        // Debug: Print first few output samples
+        if (sample_debug_count < 3 && i < 5) {
+            printf("  sample[%zu]=%.3f -> s16=%d s32=0x%08lx\n", i, sample, s16, (unsigned long)s32);
+        }
+        
         buf[i] = s32;
     }
+    
+    if (sample_debug_count < 3) sample_debug_count++;
 }
+
+// Helper function to convert frequency to note 
+const char* frequencyToNote(float freq) {
+    const float A4 = 440.0;
+    float semitonesFromA4 = 12 * log2(freq / A4);
+    int midi = round(69 + semitonesFromA4);
+    const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    
+    int noteIndex = midi % 12;
+    int octave = midi / 12 - 1;
+
+    static char note[4];  // Enough space for note like "A4", "C#5", etc.
+    snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
+    return note;
+}
+
+// Function to get the frequency out of the array of frequencies
+const char* getNoteFromPressureAndFreq(float* freqs, int* pressures) {
+    int highestPressureIndex = 0;
+    for (int i = 1; i < 4; i++) { // tie goes to highest index
+        if (pressures[i] >= pressures[highestPressureIndex]) {
+            highestPressureIndex = i;
+        }
+    }
+
+    float freq = freqs[highestPressureIndex];
+
+    return frequencyToNote(freq);
+}
+
+void appendNoteToFile(const char* note) {
+    const char* filePath = "/App/live/notes.txt";
+
+    FILE* file = fopen(filePath, "a");
+    if (file == NULL) {
+        printf("Error opening file for appending.\n");
+        return;
+    }
+
+    fprintf(file, "%s\n", note);
+
+    fclose(file);
+}
+
 // Output task: generates audio buffer using violin synthesis
 void output(void *pvParameters) {
     allData *data = (allData *)pvParameters;
@@ -273,10 +322,8 @@ void output(void *pvParameters) {
 
     while (!data->end) {
         // Update target frequencies from position data
-        // touchSensor(data);
-
         noteConversion(data);
-
+        
         // Update string frequencies
         for (int s = 0; s < 4; s++) {
             strings[s].f0 = data->stringsFreqs[s];
@@ -285,7 +332,7 @@ void output(void *pvParameters) {
         // Debug: print inputs and derived frequencies occasionally
         debug_frames++;
         int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
-        float bowSpeed = (float)bow_milli / 1000.0f;
+        float bowSpeed = (float)bow_milli / 500.0f;
 
         if (debug_frames % 10000 == 0) { // periodic diagnostics
             printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
@@ -294,12 +341,13 @@ void output(void *pvParameters) {
             printf("press: [%d, %d, %d, %d] bow: %.3f\n",
                 data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
                 bowSpeed);
+            const char* note = getNoteFromPressureAndFreq(data->stringsFreqs, data->pressures);
+            printf("Note: %s\n", note);
+            appendNoteToFile(note);
         }
 
         // Generate one block & write immediately (blocking maintains pacing)
-        // NOW PASSES remote IMU to fill_violin_buffer
-        ImuPacket *remote = get_remote_imu();
-        fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev, &remote->imu);
+        fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev);
         audio_driver_write(pcm, buf_samples);
     }
 
