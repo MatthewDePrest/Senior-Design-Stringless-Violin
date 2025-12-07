@@ -29,5 +29,7 @@ void output(void *pvParameters);
 void accelerometer(allData *data);
 void pressureSensor(allData *data);
 void touchSensor(allData *data);
+void touchSensor_task(void *pvParameters);
+void adc_init(void);  // ADD THIS LINE
 
 #endif

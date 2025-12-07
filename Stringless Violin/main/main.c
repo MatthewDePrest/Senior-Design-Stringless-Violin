@@ -68,10 +68,13 @@ void app_main(void)
     data.end = 0;   
 
     pressureSensor(&data);
-    touchSensor(&data);
     accelerometer(&data);
     // mpu6050_init();
     esp_now_receiver_init();
+    xTaskCreate(touchSensor_task, "touchSensor_task", 4096, &data, 10, NULL);
+    
+    // Create output task (HIGHEST priority - audio critical)
+    xTaskCreate(output, "output", 8192, &data, 25, NULL);
     
     BaseType_t result = xTaskCreatePinnedToCore(
         output,
@@ -135,7 +138,7 @@ void app_main(void)
             }
         }
 
-        touchSensor(&data);
+        // touchSensor(&data);
         loop_count++;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

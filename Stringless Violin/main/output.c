@@ -8,13 +8,14 @@
 #include "audio_driver.h"
 #include "esp_now_reciever.h"
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+#define M_PI 3.1415
 #endif
 
 // ---------- Audio Configuration ----------
 static const uint32_t SAMPLE_RATE = 48000;
-static const size_t FRAMES = 256; // small block for smoother streaming
+static const size_t FRAMES = 100; // used to be 256 small block for smoother streaming
 static int VOLUME_Q15 = 1200;
+static float g_bow_velocity_sensitivity = 4.0f;  // 0.0 = no effect, 1.0 = normal, 2.0 = doubled sensitivity
 
 // Violin-ish harmonic profile (fundamental + 5 harmonics)
 static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
@@ -27,7 +28,7 @@ static float g_vib_depth_cents = 12.0f;
 
 // Gentle 1-pole low-pass "bow" tone
 static bool g_lpf_on = true;
-static float g_lpf_cut_hz = 4500.0f;
+static float g_lpf_cut_hz = 2000.0f; // prev 4500
 
 // ---------- 1-pole Low-Pass Filter ----------
 typedef struct {
@@ -39,7 +40,7 @@ static inline float accel_x_only(const MPU6050_Data *imu) {
     float ax = fabsf(imu->ax);
     
     // Apply deadzone: ignore small movements (sensor noise ~0.05g)
-    if (ax < 0.5f) {
+    if (ax < 0.02f) {
         return 0.0f;
     }
     
@@ -177,16 +178,8 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
     // Get X-axis acceleration with deadzone applied
     float accel_x = accel_x_only(remote_imu);
     
-    // Debug print every 100 buffers (~5 sec)
-    static int debug_count = 0;
-    if (debug_count % 100 == 0) {
-        printf("[VOLUME] accel_x=%.3f (raw: %.3f) bowSpeed=%.3f accel_vol=%.3f\n", 
-               accel_x, remote_imu->ax, bowSpeed, fminf(accel_x / 3.0f, 1.0f));
-    }
-    debug_count++;
-    
-    // Normalize 0-3g to 0-1, clamp at 1
-    float accel_volume = fminf(accel_x / 3.0f, 1.0f);
+    // Apply sensitivity multiplier, then normalize 0-3g to 0-1, clamp at 1
+    float accel_volume = fminf((accel_x * g_bow_velocity_sensitivity) / 3.0f, 1.0f);
     
     for (size_t i = 0; i < frames; ++i) {
         float sample = 0.0f;
@@ -214,8 +207,7 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
             
-            // Volume = (accel × bow speed × pressure)
-            // If accel_x=0 (below threshold), amplitude stays 0 → silent
+            // Volume = (accel_with_sensitivity × bow speed × pressure)
             float amplitude = accel_volume * (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
             sample += string_sample * amplitude;
         }
@@ -281,8 +273,10 @@ void output(void *pvParameters) {
 
     while (!data->end) {
         // Update target frequencies from position data
+        // touchSensor(data);
+
         noteConversion(data);
-        
+
         // Update string frequencies
         for (int s = 0; s < 4; s++) {
             strings[s].f0 = data->stringsFreqs[s];

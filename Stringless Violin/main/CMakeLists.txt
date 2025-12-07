@@ -10,6 +10,7 @@ idf_component_register(
         "output.c"
         "pressureSensor.c"
         "touchSensor.c"
+        "touchSensor_task.c"
     INCLUDE_DIRS 
         "."
 )
