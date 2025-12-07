@@ -229,6 +229,49 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
     if (sample_debug_count < 3) sample_debug_count++;
 }
 
+// Helper function to convert frequency to note 
+const char* frequencyToNote(float freq) {
+    const float A4 = 440.0;
+    float semitonesFromA4 = 12 * log2(freq / A4);
+    int midi = round(69 + semitonesFromA4);
+    const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    
+    int noteIndex = midi % 12;
+    int octave = midi / 12 - 1;
+
+    static char note[4];  // Enough space for note like "A4", "C#5", etc.
+    snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
+    return note;
+}
+
+// Function to get the frequency out of the array of frequencies
+const char* getNoteFromPressureAndFreq(float* freqs, int* pressures) {
+    int highestPressureIndex = 0;
+    for (int i = 1; i < 4; i++) { // tie goes to highest index
+        if (pressures[i] >= pressures[highestPressureIndex]) {
+            highestPressureIndex = i;
+        }
+    }
+
+    float freq = freqs[highestPressureIndex];
+
+    return frequencyToNote(freq);
+}
+
+void appendNoteToFile(const char* note) {
+    const char* filePath = "/App/live/notes.txt";
+
+    FILE* file = fopen(filePath, "a");
+    if (file == NULL) {
+        printf("Error opening file for appending.\n");
+        return;
+    }
+
+    fprintf(file, "%s\n", note);
+
+    fclose(file);
+}
+
 // Output task: generates audio buffer using violin synthesis
 void output(void *pvParameters) {
     allData *data = (allData *)pvParameters;
@@ -289,7 +332,7 @@ void output(void *pvParameters) {
         // Debug: print inputs and derived frequencies occasionally
         debug_frames++;
         int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
-        float bowSpeed = (float)bow_milli / 1000.0f;
+        float bowSpeed = (float)bow_milli / 500.0f;
 
         if (debug_frames % 10000 == 0) { // periodic diagnostics
             printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
@@ -298,6 +341,9 @@ void output(void *pvParameters) {
             printf("press: [%d, %d, %d, %d] bow: %.3f\n",
                 data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
                 bowSpeed);
+            const char* note = getNoteFromPressureAndFreq(data->stringsFreqs, data->pressures);
+            printf("Note: %s\n", note);
+            appendNoteToFile(note);
         }
 
         // Generate one block & write immediately (blocking maintains pacing)
