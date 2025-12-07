@@ -84,7 +84,7 @@ void mpu6050_init(void) {
 void mpu6050_read(MPU6050_Data *data) {
     if (!mpu6050_initialized || !data) {
         if (!mpu6050_initialized) {
-            ESP_LOGW(TAG, "MPU6050 not initialized");
+            //ESP_LOGW(TAG, "MPU6050 not initialized");
         }
         return;
     }
