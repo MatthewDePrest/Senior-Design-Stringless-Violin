@@ -209,8 +209,8 @@ const char* frequencyToNote(float freq) {
     int noteIndex = midi % 12;
     int octave = midi / 12 - 1;
 
-    static char note[8];
-    // snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
+    static char note[16];
+    snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
     return note;
 }
 
@@ -283,6 +283,8 @@ void output(void *pvParameters) {
                 data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
             printf("press: [%d, %d, %d, %d]\n",
                 data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3]);
+        }
+        if (debug_frames % 100 == 0) {        
             const char* note = getNoteFromPressureAndFreq(data->stringsFreqs, data->pressures);
             appendNoteToFile(note);
         }
