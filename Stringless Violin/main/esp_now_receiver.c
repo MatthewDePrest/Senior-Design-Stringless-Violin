@@ -9,10 +9,29 @@
 
 static ImuPacket remote_imu;
 static ImuPacket local_imu;
+static uint32_t last_packet_time = 0;
+static uint32_t packet_count = 0;
+static uint32_t last_debug_time = 0;
 
 static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     if (len == sizeof(ImuPacket)) {
         memcpy(&remote_imu, data, sizeof(ImuPacket));
+    }
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    uint32_t time_since_last = now - last_packet_time;
+    last_packet_time = now;
+    packet_count++;
+    
+    // Print connection speed every 1 second
+    if (now - last_debug_time > 1000) {
+        float packets_per_sec = packet_count / ((float)(now - last_debug_time) / 1000.0f);
+        float avg_latency_ms = (float)time_since_last;
+        
+        ESP_LOGI("ESP_NOW", "RX Speed: %.1f packets/sec | Latency: %.1f ms | Total: %lu packets",
+                 packets_per_sec, avg_latency_ms, (unsigned long)packet_count);
+        
+        last_debug_time = now;
+        packet_count = 0;
     }
 }
 

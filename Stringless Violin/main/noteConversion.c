@@ -37,24 +37,19 @@ static void read_frequencies() {
 }
 
 void noteConversion(allData *data) {
-    //read_frequencies();
     defaultFrequency();
 
-    // Use the working-code logic: linearly map ADC position (0..4095)
-    // to frequency within each string's range [open..5th position].
-    // Index mapping in this project:
-    //   0:G (196 Hz) -> max 293.66 Hz
-    //   1:D (293.66 Hz) -> max 440.00 Hz
-    //   2:A (440.00 Hz) -> max 659.25 Hz
-    //   3:E (659.25 Hz) -> max 987.77 Hz
+    // Linear map ADC position (0..4095) to frequency within each string's range
     const float max_freq[4] = { 293.66f, 440.00f, 659.25f, 987.77f };
 
     for (int s = 0; s < 4; ++s) {
         float pos = data->positions[s];
-        // Clamp ADC range defensively
+        
+        // Clamp ADC range to 0-4095
         if (pos < 0.0f) pos = 0.0f;
-        if (pos >= 4000.0f) pos = 0.0f;
-        float frac = pos / 4095.0f; // 0..1
+        if (pos > 4095.0f) pos = 4095.0f;  // FIX: was >= 4000.0f pos = 0.0f
+        
+        float frac = pos / 4095.0f;  // 0..1
         float fmin = base[s];
         float fmax = max_freq[s];
         data->stringsFreqs[s] = fmin + frac * (fmax - fmin);

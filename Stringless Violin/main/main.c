@@ -66,9 +66,11 @@ void app_main(void)
 
     allData data = {0};
     data.end = 0;   
+    data.pressures[0] = 1023;
 
     pressureSensor(&data);
     accelerometer(&data);
+    // touchSensor(&data);
     // mpu6050_init();
     esp_now_receiver_init();
     xTaskCreate(touchSensor_task, "touchSensor_task", 4096, &data, 10, NULL);
@@ -95,6 +97,7 @@ void app_main(void)
     uint32_t loop_count = 0;
     while (!data.end) {
         update_local_imu();
+        
         int level = gpio_get_level(INPUT_PIN);
 
         ImuPacket *local = get_local_imu();

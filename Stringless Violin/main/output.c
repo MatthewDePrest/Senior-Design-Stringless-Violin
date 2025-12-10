@@ -12,8 +12,8 @@
 
 // ---------- Audio Configuration ----------
 static const uint32_t SAMPLE_RATE = 48000;
-static const size_t FRAMES = 256;
-static int VOLUME_Q15 = 1200;
+static const size_t FRAMES = 100; // used to be 256
+static int VOLUME_Q15 = 1600;
 
 // Violin-ish harmonic profile
 static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
@@ -161,6 +161,9 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
         float sample = 0.0f;
         
         for (int s = 0; s < 4; s++) {
+            if(s!=0){
+                continue;
+            }
             if (data->pressures[s] <= 10) continue;
             
             float f0 = strings[s].f0;
