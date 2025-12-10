@@ -8,8 +8,8 @@ idf_component_register(
         "mpu6050.c"
         "noteConversion.c"
         "output.c"
-        "pressureSensor.c"
-        "touchSensor.c"
+        # "pressureSensor.c"
+        # "touchSensor.c"
         "touchSensor_task.c"
     INCLUDE_DIRS 
         "."

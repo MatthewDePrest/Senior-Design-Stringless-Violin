@@ -66,10 +66,10 @@ void app_main(void)
 
     allData data = {0};
     data.end = 0;   
-    data.pressures[0] = 1023;
+    // data.pressures[0] = 1023;
 
-    pressureSensor(&data);
-    accelerometer(&data);
+    // pressureSensor(&data); // edit 1 removed pressure sensor
+    // accelerometer(&data); // Edit 2 removed accelerometer
     // touchSensor(&data);
     // mpu6050_init();
     esp_now_receiver_init();
@@ -83,15 +83,15 @@ void app_main(void)
     int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
     printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
 
-    gpio_config_t io_conf = {
-        .pin_bit_mask = 1ULL << INPUT_PIN,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE
-    };
+    // gpio_config_t io_conf = {
+    //     .pin_bit_mask = 1ULL << INPUT_PIN,
+    //     .mode = GPIO_MODE_INPUT,
+    //     .pull_up_en = GPIO_PULLUP_ENABLE,
+    //     .pull_down_en = GPIO_PULLDOWN_DISABLE
+    // };
 
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-    ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
+    // ESP_ERROR_CHECK(gpio_config(&io_conf));
+    // ESP_LOGI(TAG, "Reading GPIO %d...", INPUT_PIN);
 
     // Main loop (Core 0)
     uint32_t loop_count = 0;
