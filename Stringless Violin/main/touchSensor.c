@@ -46,6 +46,8 @@ void touchSensor(allData *data) {
     }
     
     raw = adc1_get_raw(ADC1_CHANNEL_3);
+    printf("ADC_CH5: raw=%d (0-4095 range)\n", raw);
+
     data->positions[0] = (float)raw;
     
     // Debug: print occasionally to verify readings

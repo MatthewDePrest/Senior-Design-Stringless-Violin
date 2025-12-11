@@ -1,2 +1,16 @@
-idf_component_register(SRCS "distance_calc.c" "accelerometer.c" "noteConversion.c" "pressureSensor.c" "touchSensor.c" "output.c" "main.c" "audio_driver.c" "esp_now_receiver.c" "mpu6050.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS 
+        "accelerometer.c"
+        "audio_driver.c"
+        "distance_calc.c"
+        "esp_now_receiver.c"
+        "main.c"
+        "mpu6050.c"
+        "noteConversion.c"
+        "output.c"
+        "pressureSensor.c"
+        "touchSensor.c"
+        "touchSensor_task.c"
+    INCLUDE_DIRS 
+        "."
+)

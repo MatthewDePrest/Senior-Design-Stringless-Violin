@@ -187,7 +187,6 @@ esp_err_t audio_driver_init(int sample_rate) {
     esp_err_t ret;
     g_sample_rate = sample_rate;
 
-    // Configure I2S for master TX, 32-bit samples with APLL (matching working code)
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
         .sample_rate = g_sample_rate,
@@ -195,10 +194,10 @@ esp_err_t audio_driver_init(int sample_rate) {
         .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
         .communication_format = I2S_COMM_FORMAT_STAND_I2S,
         .intr_alloc_flags = 0,
-        .dma_buf_count = 8,
+        .dma_buf_count = 16,  // INCREASED from 8
         .dma_buf_len = 256,
         .use_apll = true,
-        .tx_desc_auto_clear = true,
+        .tx_desc_auto_clear = true,  // CRITICAL: auto-fill with zeros
         .fixed_mclk = 0
     };
 
