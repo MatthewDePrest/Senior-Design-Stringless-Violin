@@ -1,58 +1,46 @@
+// language: c
+// filepath: main/touchSensor.c
 //This is for the hand positions on the neck of the violin and holding down the strings
 #include "main.h"
-// adc_reader.c
 #include "driver/adc.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "esp_adc/adc_oneshot.h"
-
-#include "driver/adc.h"
-
- 
-
-adc_oneshot_unit_handle_t adc;
+static const char *TAG = "touchSensor";
 
 void adc_init(void) {
-
-    adc_oneshot_unit_init_cfg_t unit_cfg = { .unit_id = ADC_UNIT_1 };
-
     adc1_config_width(ADC_WIDTH_BIT_12);
-
+    // Configure channel for your potentiometer (check which pin you connected it to)
+    // GPIO4 → ADC1_CHANNEL_3
+    // GPIO5 → ADC1_CHANNEL_4
+    // Adjust channel if your pot is on a different pin
     adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11);
-
-    // ESP_ERROR_CHECK(adc_oneshot_new_unit(&unit_cfg, &adc));
-
- 
-
-    adc_oneshot_chan_cfg_t ch_cfg = { .bitwidth = ADC_BITWIDTH_DEFAULT,
-
-                                      .atten = ADC_ATTEN_DB_11 };
-
-    // ESP_ERROR_CHECK(adc_oneshot_config_channel(adc, ADC_CHANNEL_2, &ch_cfg));
-
 }
 
 void touchSensor(allData *data) {
-    // Read a single sample for initialization. Long-running sampling
-    // belongs in a dedicated task rather than a blocking function.
     static bool first_call = true;
-    int raw = 0;
     
     if (first_call) {
         adc_init();
         first_call = false;
     }
     
-    raw = adc1_get_raw(ADC1_CHANNEL_3);
-    printf("ADC_CH5: raw=%d (0-4095 range)\n", raw);
-
+    // Read ADC1_CHANNEL_3 (GPIO4)
+    int raw = adc1_get_raw(ADC1_CHANNEL_3);
+    
+    // Update position for string 0 (G string)
     data->positions[0] = (float)raw;
     
-    // Debug: print occasionally to verify readings
+    // For now, set other strings to mid-range so they play
+    // (In full implementation, you'd have pots for each string)
+    data->positions[1] = (float)raw * 0.8f;  // D string slightly lower
+    data->positions[2] = (float)raw * 0.6f;  // A string mid-range
+    data->positions[3] = (float)raw * 0.4f;  // E string higher
+    
     static int debug_count = 0;
-    if (debug_count++ % 100 == 0) {
-        printf("touchSensor: raw=%d, pos[0]=%.1f\n", raw, data->positions[0]);
+    if (debug_count++ % 50 == 0) {
+        printf("touchSensor: raw=%d → positions=[%.1f, %.1f, %.1f, %.1f]\n", 
+               raw, data->positions[0], data->positions[1], data->positions[2], data->positions[3]);
     }
 }

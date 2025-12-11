@@ -2,7 +2,7 @@
   "idf.espIdfPathWin": "d:\\SeniorDesign\\v5.5.1\\esp-idf",
   "idf.toolsPathWin": "d:\\SeniorDesign\\5.5",
   "idf.pythonInstallPath": "d:\\SeniorDesign\\5.5\\tools\\idf-python\\3.11.2\\python.exe",
-  "idf.portWin": "COM9",
+  "idf.portWin": "COM10",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],

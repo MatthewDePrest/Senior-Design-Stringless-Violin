@@ -1,6 +1,3 @@
-// Violin-style synth with harmonics, vibrato, low-pass, and reverb.
-// Integrates with allData struct for pressure, position, and bow speed control.
-
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <string.h>
@@ -8,25 +5,26 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "audio_driver.h"
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 // ---------- Audio Configuration ----------
 static const uint32_t SAMPLE_RATE = 48000;
-static const size_t FRAMES = 256; // small block for smoother streaming
-static int VOLUME_Q15 = 1200;
+static const size_t FRAMES = 100; // used to be 256
+static int VOLUME_Q15 = 1600;
 
-// Violin-ish harmonic profile (fundamental + 5 harmonics)
+// Violin-ish harmonic profile
 static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
-#define NH 6  // Number of harmonics (must match HARM array size)
+#define NH 6
 
 // Vibrato settings
 static bool g_vibrato_on = true;
 static float g_vib_rate_hz = 5.2f;
 static float g_vib_depth_cents = 12.0f;
-
-// Gentle 1-pole low-pass "bow" tone
+static float volMod = 3.0f;
+// Low-pass filter
 static bool g_lpf_on = true;
 static float g_lpf_cut_hz = 4500.0f;
 
@@ -58,7 +56,6 @@ typedef struct {
 
 static inline float comb_process(Comb* c, float x) {
     float y = c->buf[c->idx];
-    // one-pole lowpass in feedback
     c->fil = (1.0f - c->damp) * y + c->damp * c->fil;
     c->buf[c->idx] = x + c->fil * c->fb;
     c->idx++;
@@ -83,7 +80,6 @@ static inline float allpass_process(Allpass* a, float x) {
 }
 
 typedef struct {
-    // Tuned ~30–45 ms combs for 48 kHz; small RAM footprint
     float c1[1439];
     float c2[1601];
     float c3[1867];
@@ -95,9 +91,9 @@ typedef struct {
     Allpass aps[2];
     
     bool enabled;
-    float mix;    // wet mix 0..1
-    float room;   // feedback amount 0..0.95
-    float damp;   // HF damping 0..1
+    float mix;
+    float room;
+    float damp;
 } ReverbSC;
 
 static void reverb_init(ReverbSC* rev) {
@@ -117,15 +113,6 @@ static void reverb_init(ReverbSC* rev) {
     rev->aps[1] = (Allpass){rev->a2, 341, 0, 0.5f};
 }
 
-__attribute__((unused))
-static void reverb_retune(ReverbSC* rev) {
-    for (int i = 0; i < 4; i++) {
-        rev->combs[i].fb = rev->room;
-        rev->combs[i].damp = rev->damp;
-    }
-}
-// Note: reverb_retune is available for runtime reverb parameter adjustments
-
 static inline float reverb_process(ReverbSC* rev, float x) {
     if (!rev->enabled) return x;
     
@@ -134,20 +121,20 @@ static inline float reverb_process(ReverbSC* rev, float x) {
     s += comb_process(&rev->combs[1], x);
     s += comb_process(&rev->combs[2], x);
     s += comb_process(&rev->combs[3], x);
-    s *= 0.25f; // average comb sum
+    s *= 0.25f;
     
     s = allpass_process(&rev->aps[0], s);
     s = allpass_process(&rev->aps[1], s);
     
-    return (1.0f - rev->mix) * x + rev->mix * s; // wet/dry
+    return (1.0f - rev->mix) * x + rev->mix * s;
 }
 
 // ---------- Per-String Note State ----------
 typedef struct {
-    float f0;           // base frequency from mapping
-    float vib_phase;    // vibrato phase accumulator
-    float vib_inc;      // vibrato phase increment
-    float phase[NH];    // harmonic phase accumulators
+    float f0;
+    float vib_phase;
+    float vib_inc;
+    float phase[NH];
 } StringState;
 
 // ---------- Helper Functions ----------
@@ -155,28 +142,32 @@ static inline float cents_to_ratio(float cents) {
     return powf(2.0f, cents / 1200.0f);
 }
 
-// Fill one audio block with violin synthesis for all 4 strings
+// SINGLE fill_violin_buffer - takes bow speed from remote IMU
 static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data, 
                                 StringState* strings, OnePoleLPF* lpf, ReverbSC* rev) {
     const float twoPi = 2.0f * (float)M_PI;
     
-    // Snapshot atomic bowSpeed for this buffer
-    int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
-    float bowSpeed = (float)bow_milli / 1000.0f;
-    
-    static int sample_debug_count = 0;
+    // Get bow speed from remote IMU (ESP-XIAO) with NULL check
+    float bowSpeed = 0.5f;  // Default fallback
+    ImuPacket *remote = get_remote_imu();
+    if (remote != NULL) {
+        float remote_accel_mag = sqrtf(remote->imu.ax * remote->imu.ax + 
+                                    remote->imu.ay * remote->imu.ay + 
+                                    remote->imu.az * remote->imu.az);
+        bowSpeed = fminf(remote_accel_mag / 20.0f, 1.0f);
+    }
     
     for (size_t i = 0; i < frames; ++i) {
         float sample = 0.0f;
         
-        // Mix all 4 strings (matching working code: no per-sample smoothing)
         for (int s = 0; s < 4; s++) {
-            // Use pressure threshold as gate
+            if(s!=0){
+                continue;
+            }
             if (data->pressures[s] <= 10) continue;
             
             float f0 = strings[s].f0;
             
-            // Apply vibrato to base frequency
             float f = f0;
             if (g_vibrato_on) {
                 float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
@@ -185,11 +176,9 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 f *= cents_to_ratio(cents);
             }
             
-            // Generate harmonics for this string
             float string_sample = 0.0f;
             for (int h = 0; h < NH; ++h) {
                 float fh = f * (float)(h + 1);
-                // Harmonic culling to avoid aliasing/harshness at high notes
                 if (fh > 0.45f * (float)SAMPLE_RATE) break;
                 float inc = twoPi * fh / (float)SAMPLE_RATE;
                 strings[s].phase[h] += inc;
@@ -197,92 +186,58 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
             
-            // Amplitude influenced by bowSpeed and pressure (matching working code)
-            float amplitude = (bowSpeed / 100.0f) * ((float)data->pressures[s] / 1023.0f);
+            float amplitude = volMod * bowSpeed * ((float)data->pressures[s] / 1023.0f);
             sample += string_sample * amplitude;
-            
-            if (sample_debug_count < 3 && i < 5) {
-                printf("  s=%d f0=%.1f amp=%.3f str_samp=%.3f\n", s, f0, amplitude, string_sample);
-            }
         }
         
-        // Apply gentle low-pass filter
         if (g_lpf_on) {
             sample = lpf_process(lpf, sample);
         }
         
-        // Apply reverb
         sample = reverb_process(rev, sample);
         
-    // Convert to 32-bit by placing 16-bit sample in upper halfword (original method)
-    int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
-    int32_t s32 = ((int32_t)s16) << 16;
-        
-        // Debug: Print first few output samples
-        if (sample_debug_count < 3 && i < 5) {
-            printf("  sample[%zu]=%.3f -> s16=%d s32=0x%08lx\n", i, sample, s16, (unsigned long)s32);
-        }
+        int16_t s16 = (int16_t) fmaxf(fminf(sample * (float)VOLUME_Q15, 32767.0f), -32768.0f);
+        int32_t s32 = ((int32_t)s16) << 16;
         
         buf[i] = s32;
     }
-    
-    if (sample_debug_count < 3) sample_debug_count++;
 }
 
-// Helper function to convert frequency to note 
 const char* frequencyToNote(float freq) {
-    const float A4 = 440.0;
-    float semitonesFromA4 = 12 * log2(freq / A4);
-    int midi = round(69 + semitonesFromA4);
+    const float A4 = 440.0f;
+    float semitonesFromA4 = 12.0f * log2f(freq / A4);
+    int midi = (int)roundf(69.0f + semitonesFromA4);
     const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     
     int noteIndex = midi % 12;
     int octave = midi / 12 - 1;
 
-    static char note[4];  // Enough space for note like "A4", "C#5", etc.
+    static char note[16];
     snprintf(note, sizeof(note), "%s%d", noteNames[noteIndex], octave);
     return note;
 }
 
-// Function to get the frequency out of the array of frequencies
 const char* getNoteFromPressureAndFreq(float* freqs, int* pressures) {
     int highestPressureIndex = 0;
-    for (int i = 1; i < 4; i++) { // tie goes to highest index
+    for (int i = 1; i < 4; i++) {
         if (pressures[i] >= pressures[highestPressureIndex]) {
             highestPressureIndex = i;
         }
     }
-
     float freq = freqs[highestPressureIndex];
-
     return frequencyToNote(freq);
 }
 
 void appendNoteToFile(const char* note) {
-    const char* filePath = "/App/live/notes.txt";
-
-    FILE* file = fopen(filePath, "a");
-    if (file == NULL) {
-        printf("Error opening file for appending.\n");
-        return;
-    }
-
-    fprintf(file, "%s\n", note);
-
-    fclose(file);
+    printf("Note: %s\n", note);
 }
 
-// Output task: generates audio buffer using violin synthesis
 void output(void *pvParameters) {
     allData *data = (allData *)pvParameters;
 
-    // Use fixed block size for smoother streaming (avoid timing gaps)
     const int buf_samples = (int)FRAMES;
-
-    // Initialize audio driver at 48 kHz (matching working code)
     audio_driver_init(SAMPLE_RATE);
 
-    // Allocate audio buffer (mono, will be duplicated to stereo in driver)
     int32_t *pcm = malloc(sizeof(int32_t) * buf_samples);
     if (!pcm) {
         printf("output: failed to allocate pcm buffer\n");
@@ -290,15 +245,12 @@ void output(void *pvParameters) {
         return;
     }
 
-    // Initialize per-string state
     StringState strings[4];
     memset(strings, 0, sizeof(strings));
     
-    // Initialize filters and effects
     OnePoleLPF lpf = {0};
     lpf_set_cutoff(&lpf, g_lpf_cut_hz);
     
-    // Allocate reverb on heap (too large for stack - ~7KB)
     ReverbSC *rev = malloc(sizeof(ReverbSC));
     if (!rev) {
         printf("output: failed to allocate reverb buffer\n");
@@ -312,7 +264,6 @@ void output(void *pvParameters) {
     rev->damp = 0.30f;
     reverb_init(rev);
 
-    // Initialize vibrato parameters for all strings
     for (int s = 0; s < 4; s++) {
         strings[s].vib_inc = (2.0f * (float)M_PI * g_vib_rate_hz) / (float)SAMPLE_RATE;
     }
@@ -321,32 +272,26 @@ void output(void *pvParameters) {
     printf("output: Audio synthesis task started. Sample rate=%lu Hz block=%d\n", (unsigned long)SAMPLE_RATE, buf_samples);
 
     while (!data->end) {
-        // Update target frequencies from position data
         noteConversion(data);
         
-        // Update string frequencies
         for (int s = 0; s < 4; s++) {
             strings[s].f0 = data->stringsFreqs[s];
         }
 
-        // Debug: print inputs and derived frequencies occasionally
         debug_frames++;
-        int32_t bow_milli = atomic_load(&data->bowSpeed_milli);
-        float bowSpeed = (float)bow_milli / 500.0f;
-
-        if (debug_frames % 10000 == 0) { // periodic diagnostics
+        
+        if (debug_frames % 10000 == 0) {
             printf("pos: [%.1f, %.1f, %.1f, %.1f]  freq: [%.1f, %.1f, %.1f, %.1f]\n",
                 data->positions[0], data->positions[1], data->positions[2], data->positions[3],
                 data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
-            printf("press: [%d, %d, %d, %d] bow: %.3f\n",
-                data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3],
-                bowSpeed);
+            printf("press: [%d, %d, %d, %d]\n",
+                data->pressures[0], data->pressures[1], data->pressures[2], data->pressures[3]);
+        }
+        if (debug_frames % 100 == 0) {        
             const char* note = getNoteFromPressureAndFreq(data->stringsFreqs, data->pressures);
-            printf("Note: %s\n", note);
             appendNoteToFile(note);
         }
 
-        // Generate one block & write immediately (blocking maintains pacing)
         fill_violin_buffer(pcm, buf_samples, data, strings, &lpf, rev);
         audio_driver_write(pcm, buf_samples);
     }

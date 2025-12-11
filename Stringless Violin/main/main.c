@@ -66,29 +66,19 @@ void app_main(void)
 
     allData data = {0};
     data.end = 0;   
+    data.pressures[0] = 1023;
 
     pressureSensor(&data);
     accelerometer(&data);
+    // touchSensor(&data);
     // mpu6050_init();
     esp_now_receiver_init();
     xTaskCreate(touchSensor_task, "touchSensor_task", 4096, &data, 10, NULL);
     
     // Create output task (HIGHEST priority - audio critical)
-    xTaskCreate(output, "output", 8192, &data, 25, NULL);
+    xTaskCreate(output, "output", 8192, &data, 20, NULL);
     
-    BaseType_t result = xTaskCreatePinnedToCore(
-        output,
-        "Audio output",
-        8192,
-        &data,
-        1,
-        NULL,
-        1
-    );
-
-    if (result != pdPASS) {
-        printf("Failed to create task.\n");
-    }
+    
 
     int32_t bow_milli_after = atomic_load(&data.bowSpeed_milli);
     printf("main: bowSpeed_milli after init = %ld (%.3f)\n", (long)bow_milli_after, (double)bow_milli_after/1000.0);
@@ -107,6 +97,7 @@ void app_main(void)
     uint32_t loop_count = 0;
     while (!data.end) {
         update_local_imu();
+        
         int level = gpio_get_level(INPUT_PIN);
 
         ImuPacket *local = get_local_imu();
