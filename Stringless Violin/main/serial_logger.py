@@ -10,11 +10,12 @@ import os
 from datetime import datetime
 
 # Configuration
-SERIAL_PORT = "COM10"  # Match your idf.py settings
+SERIAL_PORT = "COM6"  # Match your idf.py settings
 BAUD_RATE = 115200
 #OUTPUT_FILE = "Stringless Violin/main/notes.txt"
 #OUTPUT_FILE = "D:/SeniorDesign/GroupGit/Senior-Design-Stringless-Violin/Stringless Violin/main/notes.txt" #Working
-OUTPUT_FILE = "D:/SeniorDesign/GroupGit/Senior-Design-Stringless-Violin/App/live/notes.txt"
+#OUTPUT_FILE = "D:/SeniorDesign/GroupGit/Senior-Design-Stringless-Violin/App/live/notes.txt"
+OUTPUT_FILE ="../../App/live/notes.txt"  # Adjust path as needed
 
 def main():
     try:

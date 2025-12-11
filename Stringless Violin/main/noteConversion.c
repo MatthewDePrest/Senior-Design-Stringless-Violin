@@ -37,8 +37,8 @@ static void read_frequencies() {
 }
 
 void noteConversion(allData *data) {
-    defaultFrequency();
-
+    //defaultFrequency();
+    read_frequencies();
     // Linear map ADC position (0..4095) to frequency within each string's range
     const float max_freq[4] = { 293.66f, 440.00f, 659.25f, 987.77f };
 
