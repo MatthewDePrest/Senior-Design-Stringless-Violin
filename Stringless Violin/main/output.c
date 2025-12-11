@@ -294,6 +294,7 @@ void output(void *pvParameters) {
 
     while (!data->end) {
         noteConversion(data);
+        printf("Frequencies: %.2f, %.2f, %.2f, %.2f\n", data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
         
         for (int s = 0; s < 4; s++) {
             strings[s].f0 = data->stringsFreqs[s];
