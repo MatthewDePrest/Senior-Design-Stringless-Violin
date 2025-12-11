@@ -29,18 +29,20 @@ function LearningTools({ onBack }) {
             const sharps = [];
             let isCorrect = false;
 
+            // Always push preset note first
             if (preset) {
                 keys.push(`${preset.letter.toLowerCase()}/${preset.octave}`);
                 sharps.push(preset.sharp);
             }
 
+            // Add live note (if available), which will be added as a second note in the stem
             if (live) {
                 // Check if live note matches preset
                 if (preset &&
                     preset.letter === live.letter &&
                     preset.octave === live.octave &&
                     preset.sharp === live.sharp) {
-                    isCorrect = true; // mark correct, no duplicate key
+                    isCorrect = true; // Mark correct if the live note matches the preset
                 } else {
                     keys.push(`${live.letter.toLowerCase()}/${live.octave}`);
                     sharps.push(live.sharp);
@@ -56,7 +58,7 @@ function LearningTools({ onBack }) {
     useEffect(() => {
         const div = notationRef.current;
         if (!div) return;
-        div.innerHTML = "";
+        div.innerHTML = ""; // Clear previous sheet music
 
         const renderer = new Renderer(div, Renderer.Backends.SVG);
         const numLines = Math.ceil(mergedNotes.length / NOTES_PER_LINE);
@@ -77,7 +79,6 @@ function LearningTools({ onBack }) {
                 measureGroups.push(group.slice(i, i + NOTES_PER_MEASURE));
             }
 
-            // const measureWidth = STAVE_WIDTH / measureGroups.length;
             const expectedMeasuresPerLine = NOTES_PER_LINE / NOTES_PER_MEASURE;
             const measureWidth = STAVE_WIDTH / expectedMeasuresPerLine;
 
@@ -107,22 +108,25 @@ function LearningTools({ onBack }) {
                         duration: "q",
                     });
 
+                    // Add sharps (if any)
                     n.sharps.forEach((s, i) => {
                         if (s) note.addModifier(new Accidental("#"), i);
                     });
 
+                    // Handle the two notes per stem (preset + incoming)
                     if (n.keys.length > 1) {
-                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // preset
-                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });      // live (wrong)
+                        // Set the preset note style (black)
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });
+                        // Set the live note style (red if incorrect)
+                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });
                         note.setStemStyle({ strokeStyle: "red" });
                     } else if (n.isCorrect) {
-                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" });  // correct
+                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" }); // Correct notes
                         note.setStemStyle({ strokeStyle: "green" });
                     } else {
-                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // unplayed
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" }); // Unplayed notes
                         note.setStemStyle({ strokeStyle: "black" });
                     }
-
 
                     return note;
                 });
@@ -130,7 +134,7 @@ function LearningTools({ onBack }) {
                 Formatter.FormatAndDraw(context, stave, staveNotes);
             });
         });
-    }, [mergedNotes]);
+    }, [mergedNotes]); // Redraw the sheet music when mergedNotes change
 
     // Poll /live/notes.txt every second and append new notes
     useEffect(() => {
@@ -164,7 +168,7 @@ function LearningTools({ onBack }) {
         }, QUARTER_NOTE_MS);
 
         return () => clearInterval(interval);
-    }, []);
+    }, []); // Empty dependency ensures this effect runs once
 
     const handleAddNote = () => {
         const raw = input.trim().toUpperCase();
