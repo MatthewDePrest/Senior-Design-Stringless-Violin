@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Home from './Home';
 import Tuner from './Tuner';
 import LearningTools from './LearningTools';
+import Composer from './Composer';
 
 function App() {
   // Manage which screen is currently shown
@@ -16,11 +17,14 @@ function App() {
         return <Tuner onBack={() => setCurrentPage('home')} />;
       case 'learning':
         return <LearningTools onBack={() => setCurrentPage('home')} />;
+      case 'composer':
+        return <Composer onBack={() => setCurrentPage('home')} />;  // Add this case for Worksheet
       case 'home':
       default:
         return <Home 
           onNavigateTuner={() => setCurrentPage('tuner')} 
           onNavigateLearning={() => setCurrentPage('learning')}
+          onNavigateComposer={() => setCurrentPage('composer')}  // Add the worksheet navigation handler here
         />;
     }
   }

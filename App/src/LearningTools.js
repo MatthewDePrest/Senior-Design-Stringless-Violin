@@ -14,8 +14,8 @@ function LearningTools({ onBack }) {
     const LINE_SPACING = 120;
     const STAVE_WIDTH = 950;
     const CONTEXT_WIDTH = 1000;
-
     const QUARTER_NOTE_MS = 500;
+    const liveNotesInterval = useRef(null);
 
     // Merge preset and incoming notes into one array for display
     const mergedNotes = (() => {
@@ -29,18 +29,20 @@ function LearningTools({ onBack }) {
             const sharps = [];
             let isCorrect = false;
 
+            // Always push preset note first
             if (preset) {
                 keys.push(`${preset.letter.toLowerCase()}/${preset.octave}`);
                 sharps.push(preset.sharp);
             }
 
+            // Add live note (if available), which will be added as a second note in the stem
             if (live) {
                 // Check if live note matches preset
                 if (preset &&
                     preset.letter === live.letter &&
                     preset.octave === live.octave &&
                     preset.sharp === live.sharp) {
-                    isCorrect = true; // mark correct, no duplicate key
+                    isCorrect = true; // Mark correct if the live note matches the preset
                 } else {
                     keys.push(`${live.letter.toLowerCase()}/${live.octave}`);
                     sharps.push(live.sharp);
@@ -56,7 +58,7 @@ function LearningTools({ onBack }) {
     useEffect(() => {
         const div = notationRef.current;
         if (!div) return;
-        div.innerHTML = "";
+        div.innerHTML = ""; // Clear previous sheet music
 
         const renderer = new Renderer(div, Renderer.Backends.SVG);
         const numLines = Math.ceil(mergedNotes.length / NOTES_PER_LINE);
@@ -77,7 +79,6 @@ function LearningTools({ onBack }) {
                 measureGroups.push(group.slice(i, i + NOTES_PER_MEASURE));
             }
 
-            // const measureWidth = STAVE_WIDTH / measureGroups.length;
             const expectedMeasuresPerLine = NOTES_PER_LINE / NOTES_PER_MEASURE;
             const measureWidth = STAVE_WIDTH / expectedMeasuresPerLine;
 
@@ -107,22 +108,23 @@ function LearningTools({ onBack }) {
                         duration: "q",
                     });
 
+                    // Add sharps (if any)
                     n.sharps.forEach((s, i) => {
                         if (s) note.addModifier(new Accidental("#"), i);
                     });
 
+                    // Handle the two notes per stem (preset + incoming)
                     if (n.keys.length > 1) {
-                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // preset
-                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });      // live (wrong)
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });
+                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" }); // Incorrect notes
                         note.setStemStyle({ strokeStyle: "red" });
                     } else if (n.isCorrect) {
-                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" });  // correct
+                        note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" }); // Correct notes
                         note.setStemStyle({ strokeStyle: "green" });
                     } else {
-                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });  // unplayed
+                        note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" }); // Unplayed notes
                         note.setStemStyle({ strokeStyle: "black" });
                     }
-
 
                     return note;
                 });
@@ -130,40 +132,47 @@ function LearningTools({ onBack }) {
                 Formatter.FormatAndDraw(context, stave, staveNotes);
             });
         });
-    }, [mergedNotes]);
+    }, [mergedNotes]); // Redraw the sheet music when mergedNotes change
 
-    // Poll /live/notes.txt every second and append new notes
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            try {
-                const res = await fetch("http://localhost:5000/live/notes.txt");
-                if (!res.ok) return;
+    const fetchLiveNotes = async () => {
+        try {
+            const res = await fetch("http://localhost:5000/live/notes.txt");
+            if (!res.ok) return;
 
-                const text = await res.text();
-                const tokens = text.toUpperCase().split(/[\s,]+/).filter(Boolean);
+            const text = await res.text();
+            const tokens = text.toUpperCase().split(/[\s,]+/).filter(Boolean);
 
-                setIncomingNotes((prev) => {
-                    const newNotes = [];
-                    for (const token of tokens) {
-                        const match = token.match(/^([A-G])(#?)(\d)$/);
-                        if (match) {
-                            const [, letter, sharp, octave] = match;
-                            const exists = prev.some(
-                                (n) => n.letter === letter && n.sharp === (sharp === "#") && n.octave === octave
-                            );
-                            if (!exists) {
-                                newNotes.push({ letter, sharp: sharp === "#", octave });
-                            }
-                        }
+            setIncomingNotes(() => {
+                const newNotes = [];
+                for (const token of tokens) {
+                    const match = token.match(/^([A-G])(#?)(\d)$/);
+                    if (match) {
+                        const [, letter, sharp, octave] = match;
+                        newNotes.push({ letter, sharp: sharp === "#", octave });
                     }
-                    return [...prev, ...newNotes];
-                });
-            } catch (err) {
-                console.error("Failed to load live notes", err);
-            }
-        }, QUARTER_NOTE_MS);
+                }
+                return newNotes;
+            });
+        } catch (err) {
+            console.error("Failed to load live notes", err);
+        }
+    };
 
-        return () => clearInterval(interval);
+    const startPolling = () => {
+        if (liveNotesInterval.current) {
+            clearInterval(liveNotesInterval.current);
+        }
+        liveNotesInterval.current = setInterval(fetchLiveNotes, QUARTER_NOTE_MS);
+    };
+
+    useEffect(() => {
+        startPolling(); 
+
+        return () => {
+            if (liveNotesInterval.current) {
+                clearInterval(liveNotesInterval.current); 
+            }
+        };
     }, []);
 
     const handleAddNote = () => {
