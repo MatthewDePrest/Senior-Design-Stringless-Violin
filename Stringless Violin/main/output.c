@@ -23,7 +23,7 @@ static const float HARM[] = {1.00f, 0.38f, 0.20f, 0.12f, 0.08f, 0.05f};
 static bool g_vibrato_on = true;
 static float g_vib_rate_hz = 5.2f;
 static float g_vib_depth_cents = 12.0f;
-static float volMod = 3.0f;
+static float volMod = 5.0f;
 // Low-pass filter
 static bool g_lpf_on = true;
 static float g_lpf_cut_hz = 4500.0f;
@@ -161,9 +161,6 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
         float sample = 0.0f;
         
         for (int s = 0; s < 4; s++) {
-            if(s!=0){
-                continue;
-            }
             if (data->pressures[s] <= 10) continue;
             
             float f0 = strings[s].f0;
@@ -186,6 +183,7 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
                 string_sample += HARM[h] * sinf(strings[s].phase[h]);
             }
             
+            // Base amplitude uses raw pressure mapping
             float amplitude = volMod * bowSpeed * ((float)data->pressures[s] / 1023.0f);
             sample += string_sample * amplitude;
         }

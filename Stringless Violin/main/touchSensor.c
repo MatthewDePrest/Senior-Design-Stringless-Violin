@@ -40,7 +40,7 @@ void touchSensor(allData *data) {
     
     static int debug_count = 0;
     if (debug_count++ % 50 == 0) {
-        printf("touchSensor: raw=%d → positions=[%.1f, %.1f, %.1f, %.1f]\n", 
+        STATUSF("touchSensor: raw=%d → positions=[%.1f, %.1f, %.1f, %.1f]",
                raw, data->positions[0], data->positions[1], data->positions[2], data->positions[3]);
     }
 }

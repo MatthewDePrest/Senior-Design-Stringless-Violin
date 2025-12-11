@@ -98,7 +98,7 @@ void app_main(void)
     while (!data.end) {
         update_local_imu();
         
-        int level = gpio_get_level(INPUT_PIN);
+        // int level = gpio_get_level(INPUT_PIN);
 
         ImuPacket *local = get_local_imu();
         ImuPacket *remote = get_remote_imu();
@@ -120,12 +120,14 @@ void app_main(void)
         // Print connectivity status every 5 seconds (5000 ms / 1000 ms = 5 loops)
         if (loop_count % 5 == 0) {
             if (s_remote_connected) {
-                printf("[CONNECTED] Distance: %.2f | Local Gyro: [%.2f, %.2f, %.2f] | Remote Gyro: [%.2f, %.2f, %.2f]\n",
+                printf("\r[CONNECTED] Distance: %.2f | Local Gyro: [%.2f, %.2f, %.2f] | Remote Gyro: [%.2f, %.2f, %.2f]\x1b[0K",
                        dist,
                        local->imu.gx, local->imu.gy, local->imu.gz,
                        remote->imu.gx, remote->imu.gy, remote->imu.gz);
+                fflush(stdout);
             } else {
-                printf("[DISCONNECTED] Waiting for ESP32-XIAO...\n");
+                printf("\r[DISCONNECTED] Waiting for ESP32-XIAO...\x1b[0K");
+                fflush(stdout);
             }
         }
 
