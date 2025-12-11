@@ -142,7 +142,38 @@ static inline float cents_to_ratio(float cents) {
     return powf(2.0f, cents / 1200.0f);
 }
 
-// SINGLE fill_violin_buffer - takes bow speed from remote IMU
+// Helper: generate one sample from a specific string (if active)
+static float generate_string_sample(int string_idx, allData* data, StringState* strings, 
+                                     float bowSpeed, const float twoPi) {
+    if (data->pressures[string_idx] <= 10) {
+        return 0.0f;  // String not pressed
+    }
+    
+    float f0 = strings[string_idx].f0;
+    float f = f0;
+    
+    if (g_vibrato_on) {
+        float cents = g_vib_depth_cents * sinf(strings[string_idx].vib_phase);
+        strings[string_idx].vib_phase += strings[string_idx].vib_inc;
+        if (strings[string_idx].vib_phase > twoPi) strings[string_idx].vib_phase -= twoPi;
+        f *= cents_to_ratio(cents);
+    }
+    
+    float string_sample = 0.0f;
+    for (int h = 0; h < NH; ++h) {
+        float fh = f * (float)(h + 1);
+        if (fh > 0.45f * (float)SAMPLE_RATE) break;
+        float inc = twoPi * fh / (float)SAMPLE_RATE;
+        strings[string_idx].phase[h] += inc;
+        if (strings[string_idx].phase[h] > twoPi) strings[string_idx].phase[h] -= twoPi;
+        string_sample += HARM[h] * sinf(strings[string_idx].phase[h]);
+    }
+    
+    float amplitude = volMod * bowSpeed * ((float)data->pressures[string_idx] / 1023.0f);
+    return string_sample * amplitude;
+}
+
+// fill_violin_buffer - interleaves samples from active strings
 static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data, 
                                 StringState* strings, OnePoleLPF* lpf, ReverbSC* rev) {
     const float twoPi = 2.0f * (float)M_PI;
@@ -157,36 +188,28 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
         bowSpeed = fminf(remote_accel_mag / 20.0f, 1.0f);
     }
     
-    for (size_t i = 0; i < frames; ++i) {
-        float sample = 0.0f;
-        
-        for (int s = 0; s < 4; s++) {
-            if (data->pressures[s] <= 10) continue;
-            
-            float f0 = strings[s].f0;
-            
-            float f = f0;
-            if (g_vibrato_on) {
-                float cents = g_vib_depth_cents * sinf(strings[s].vib_phase);
-                strings[s].vib_phase += strings[s].vib_inc;
-                if (strings[s].vib_phase > twoPi) strings[s].vib_phase -= twoPi;
-                f *= cents_to_ratio(cents);
-            }
-            
-            float string_sample = 0.0f;
-            for (int h = 0; h < NH; ++h) {
-                float fh = f * (float)(h + 1);
-                if (fh > 0.45f * (float)SAMPLE_RATE) break;
-                float inc = twoPi * fh / (float)SAMPLE_RATE;
-                strings[s].phase[h] += inc;
-                if (strings[s].phase[h] > twoPi) strings[s].phase[h] -= twoPi;
-                string_sample += HARM[h] * sinf(strings[s].phase[h]);
-            }
-            
-            // Base amplitude uses raw pressure mapping
-            float amplitude = volMod * bowSpeed * ((float)data->pressures[s] / 1023.0f);
-            sample += string_sample * amplitude;
+    // Find active strings at the start of this buffer
+    int active_strings[4];
+    int num_active = 0;
+    for (int s = 0; s < 4; s++) {
+        if (data->pressures[s] > 10) {
+            active_strings[num_active++] = s;
         }
+    }
+    
+    // If no strings active, fill with silence
+    if (num_active == 0) {
+        for (size_t i = 0; i < frames; ++i) {
+            buf[i] = 0;
+        }
+        return;
+    }
+    
+    // Generate samples, alternating between active strings
+    for (size_t i = 0; i < frames; ++i) {
+        // Pick which active string to generate for this sample (round-robin)
+        int string_idx = active_strings[i % num_active];
+        float sample = generate_string_sample(string_idx, data, strings, bowSpeed, twoPi);
         
         if (g_lpf_on) {
             sample = lpf_process(lpf, sample);
