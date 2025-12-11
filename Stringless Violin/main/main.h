@@ -27,9 +27,9 @@ typedef struct {
 void noteConversion(allData *data);
 void output(void *pvParameters);
 void accelerometer(allData *data);
-void pressureSensor(void *pvParameters);
-void touchSensor(allData *data);
+// void pressureSensor(allData *data);
+// void touchSensor(allData *data);
 void touchSensor_task(void *pvParameters);
-void adc_init(void);  // ADD THIS LINE
+// void adc_init(void);  // edit 1: Took out this line
 
 #endif
