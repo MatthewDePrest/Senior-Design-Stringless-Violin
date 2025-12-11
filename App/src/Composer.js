@@ -14,7 +14,7 @@ function ComposerTool({ onBack }) {  // Add `onBack` as a prop
     const STAVE_WIDTH = 950;
     const CONTEXT_WIDTH = 1000;
 
-    const QUARTER_NOTE_MS = 500; // Poll interval for live notes
+    const QUARTER_NOTE_MS = 500;
     const liveNotesInterval = useRef(null);
 
     // Fetch live notes from the server
@@ -136,30 +136,30 @@ function ComposerTool({ onBack }) {  // Add `onBack` as a prop
     };
 
     // // Function to download the SVG as PNG
-    const downloadSheetMusic = () => {
-        // Find the container that holds the SVG
-        const sheetMusicElement = notationRef.current.querySelector("svg");
+    // const downloadSheetMusic = () => {
+    //     // Find the container that holds the SVG
+    //     const sheetMusicElement = notationRef.current.querySelector("svg");
 
-        // Ensure the SVG element exists
-        if (!sheetMusicElement) {
-            alert("No SVG element found.");
-            return;
-        }
+    //     // Ensure the SVG element exists
+    //     if (!sheetMusicElement) {
+    //         alert("No SVG element found.");
+    //         return;
+    //     }
 
-        // Convert SVG to a string (the raw SVG markup)
-        const svgString = new XMLSerializer().serializeToString(sheetMusicElement);
+    //     // Convert SVG to a string (the raw SVG markup)
+    //     const svgString = new XMLSerializer().serializeToString(sheetMusicElement);
 
-        // Create a Blob from the SVG string
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
+    //     // Create a Blob from the SVG string
+    //     const svgBlob = new Blob([svgString], { type: "image/svg+xml" });
 
-        // Create a temporary download link for the SVG file
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(svgBlob);  // Convert Blob to a URL
-        link.download = "sheet_music.svg";  // Set the file name for the download
+    //     // Create a temporary download link for the SVG file
+    //     const link = document.createElement("a");
+    //     link.href = URL.createObjectURL(svgBlob);  // Convert Blob to a URL
+    //     link.download = "sheet_music.svg";  // Set the file name for the download
 
-        // Trigger the download
-        link.click();
-    };
+    //     // Trigger the download
+    //     link.click();
+    // };
 
     return (
         <div style={{ textAlign: "center", marginTop: "40px" }}>
@@ -178,9 +178,9 @@ function ComposerTool({ onBack }) {  // Add `onBack` as a prop
             </div>
 
             {/* Download Button */}
-            <div style={{ marginTop: "20px" }}>
+            {/* <div style={{ marginTop: "20px" }}>
                 <button onClick={downloadSheetMusic}>Download Sheet Music</button>
-            </div>
+            </div> */}
 
             <div
                 ref={notationRef}

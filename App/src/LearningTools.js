@@ -14,8 +14,8 @@ function LearningTools({ onBack }) {
     const LINE_SPACING = 120;
     const STAVE_WIDTH = 950;
     const CONTEXT_WIDTH = 1000;
-
     const QUARTER_NOTE_MS = 500;
+    const liveNotesInterval = useRef(null);
 
     // Merge preset and incoming notes into one array for display
     const mergedNotes = (() => {
@@ -115,10 +115,8 @@ function LearningTools({ onBack }) {
 
                     // Handle the two notes per stem (preset + incoming)
                     if (n.keys.length > 1) {
-                        // Set the preset note style (black)
                         note.setKeyStyle(0, { fillStyle: "black", strokeStyle: "black" });
-                        // Set the live note style (red if incorrect)
-                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" });
+                        note.setKeyStyle(1, { fillStyle: "red", strokeStyle: "red" }); // Incorrect notes
                         note.setStemStyle({ strokeStyle: "red" });
                     } else if (n.isCorrect) {
                         note.setKeyStyle(0, { fillStyle: "green", strokeStyle: "green" }); // Correct notes
@@ -136,39 +134,46 @@ function LearningTools({ onBack }) {
         });
     }, [mergedNotes]); // Redraw the sheet music when mergedNotes change
 
-    // Poll /live/notes.txt every second and append new notes
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            try {
-                const res = await fetch("http://localhost:5000/live/notes.txt");
-                if (!res.ok) return;
+    const fetchLiveNotes = async () => {
+        try {
+            const res = await fetch("http://localhost:5000/live/notes.txt");
+            if (!res.ok) return;
 
-                const text = await res.text();
-                const tokens = text.toUpperCase().split(/[\s,]+/).filter(Boolean);
+            const text = await res.text();
+            const tokens = text.toUpperCase().split(/[\s,]+/).filter(Boolean);
 
-                setIncomingNotes((prev) => {
-                    const newNotes = [];
-                    for (const token of tokens) {
-                        const match = token.match(/^([A-G])(#?)(\d)$/);
-                        if (match) {
-                            const [, letter, sharp, octave] = match;
-                            const exists = prev.some(
-                                (n) => n.letter === letter && n.sharp === (sharp === "#") && n.octave === octave
-                            );
-                            if (!exists) {
-                                newNotes.push({ letter, sharp: sharp === "#", octave });
-                            }
-                        }
+            setIncomingNotes(() => {
+                const newNotes = [];
+                for (const token of tokens) {
+                    const match = token.match(/^([A-G])(#?)(\d)$/);
+                    if (match) {
+                        const [, letter, sharp, octave] = match;
+                        newNotes.push({ letter, sharp: sharp === "#", octave });
                     }
-                    return [...prev, ...newNotes];
-                });
-            } catch (err) {
-                console.error("Failed to load live notes", err);
-            }
-        }, QUARTER_NOTE_MS);
+                }
+                return newNotes;
+            });
+        } catch (err) {
+            console.error("Failed to load live notes", err);
+        }
+    };
 
-        return () => clearInterval(interval);
-    }, []); // Empty dependency ensures this effect runs once
+    const startPolling = () => {
+        if (liveNotesInterval.current) {
+            clearInterval(liveNotesInterval.current);
+        }
+        liveNotesInterval.current = setInterval(fetchLiveNotes, QUARTER_NOTE_MS);
+    };
+
+    useEffect(() => {
+        startPolling(); 
+
+        return () => {
+            if (liveNotesInterval.current) {
+                clearInterval(liveNotesInterval.current); 
+            }
+        };
+    }, []);
 
     const handleAddNote = () => {
         const raw = input.trim().toUpperCase();
