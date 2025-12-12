@@ -4,6 +4,7 @@ idf_component_register(
         "audio_driver.c"
         "distance_calc.c"
         "esp_now_receiver.c"
+        "esp_now_neck_receiver.c"
         "main.c"
         "mpu6050.c"
         "noteConversion.c"

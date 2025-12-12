@@ -8,10 +8,14 @@ float BASE_FREQUENCY = 196.0f;    // Frequency of the lowest note playable, in H
 float base[4];
 
 static void defaultFrequency() {
-    base[0] = 196.0;
-    base[1] = 293.0;
-    base[2] = 440.0;
-    base[3] = 659.0;
+    // base[0] = 196.0;
+    // base[1] = 293.0;
+    // base[2] = 440.0;
+    // base[3] = 659.0;
+    base[0] = 131.0;
+    base[1] = 196.0;
+    base[2] = 293.0;
+    base[3] = 440.0;
     return;
 }
 
@@ -37,8 +41,8 @@ static void read_frequencies() {
 }
 
 void noteConversion(allData *data) {
-    //defaultFrequency();
-    read_frequencies();
+    defaultFrequency();
+    // read_frequencies();
     // Linear map ADC position (0..4095) to frequency within each string's range
     const float max_freq[4] = { 293.66f, 440.00f, 659.25f, 987.77f };
 

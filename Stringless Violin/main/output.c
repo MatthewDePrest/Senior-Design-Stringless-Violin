@@ -144,7 +144,7 @@ static inline float cents_to_ratio(float cents) {
 
 // Helper: generate one sample from a specific string (if active)
 static float generate_string_sample(int string_idx, allData* data, StringState* strings, 
-                                     float bowSpeed, const float twoPi) {
+                                     float bowSpeed, const float twoPi, float step_scale) {
     if (data->pressures[string_idx] <= 10) {
         return 0.0f;  // String not pressed
     }
@@ -154,7 +154,7 @@ static float generate_string_sample(int string_idx, allData* data, StringState* 
     
     if (g_vibrato_on) {
         float cents = g_vib_depth_cents * sinf(strings[string_idx].vib_phase);
-        strings[string_idx].vib_phase += strings[string_idx].vib_inc;
+        strings[string_idx].vib_phase += strings[string_idx].vib_inc * step_scale;
         if (strings[string_idx].vib_phase > twoPi) strings[string_idx].vib_phase -= twoPi;
         f *= cents_to_ratio(cents);
     }
@@ -163,7 +163,7 @@ static float generate_string_sample(int string_idx, allData* data, StringState* 
     for (int h = 0; h < NH; ++h) {
         float fh = f * (float)(h + 1);
         if (fh > 0.45f * (float)SAMPLE_RATE) break;
-        float inc = twoPi * fh / (float)SAMPLE_RATE;
+        float inc = step_scale * twoPi * fh / (float)SAMPLE_RATE;
         strings[string_idx].phase[h] += inc;
         if (strings[string_idx].phase[h] > twoPi) strings[string_idx].phase[h] -= twoPi;
         string_sample += HARM[h] * sinf(strings[string_idx].phase[h]);
@@ -205,11 +205,13 @@ static void fill_violin_buffer(int32_t* buf, size_t frames, allData* data,
         return;
     }
     
-    // Generate samples, alternating between active strings
+    // Generate samples, alternating between active strings. Multiply phase advance
+    // by num_active so each string preserves correct pitch despite being generated
+    // every num_active samples.
     for (size_t i = 0; i < frames; ++i) {
         // Pick which active string to generate for this sample (round-robin)
         int string_idx = active_strings[i % num_active];
-        float sample = generate_string_sample(string_idx, data, strings, bowSpeed, twoPi);
+        float sample = generate_string_sample(string_idx, data, strings, bowSpeed, twoPi, (float)num_active);
         
         if (g_lpf_on) {
             sample = lpf_process(lpf, sample);
@@ -294,7 +296,7 @@ void output(void *pvParameters) {
 
     while (!data->end) {
         noteConversion(data);
-        printf("Frequencies: %.2f, %.2f, %.2f, %.2f\n", data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
+        // printf("Frequencies: %.2f, %.2f, %.2f, %.2f\n", data->stringsFreqs[0], data->stringsFreqs[1], data->stringsFreqs[2], data->stringsFreqs[3]);
         
         for (int s = 0; s < 4; s++) {
             strings[s].f0 = data->stringsFreqs[s];
