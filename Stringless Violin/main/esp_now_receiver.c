@@ -17,6 +17,8 @@ static uint32_t last_neck_log_time = 0;
 static uint32_t packet_count = 0;
 static bool neck_connected = false;
 
+int32_t bowSpeedIntegral = 0;
+
 typedef struct {
     uint8_t pin8;
     uint8_t pin18;
@@ -58,24 +60,24 @@ static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data
         memcpy(&pkt, data, sizeof(PinPacket));
 
         // Digital pins come in as 0/1; scale to 0/1023 like the old touchSensor_task did
-        g_data->pressures[3] = pkt.pin8  ? 1023 : 0;
-        g_data->pressures[2] = pkt.pin18 ? 1023 : 0;
-        g_data->pressures[1] = pkt.pin4  ? 1023 : 0;
-        g_data->pressures[0] = pkt.pin5  ? 1023 : 0;
+        g_data->pressures[3] = pkt.pin8  ? 4091 : 0;
+        g_data->pressures[2] = pkt.pin18 ? 4091 : 0;
+        g_data->pressures[1] = pkt.pin4  ? 4091 : 0;
+        g_data->pressures[0] = pkt.pin5  ? 4091 : 0;
 
         // Map analog reading to positions (mirroring old touchSensor_task behavior)
-        g_data->positions[0] = (float)pkt.analog6;
         g_data->positions[1] = (float)pkt.analog6;
         g_data->positions[2] = (float)pkt.analog6;
         g_data->positions[3] = (float)pkt.analog6;
+        g_data->positions[0] = (float)pkt.analog6;
 
         // Do NOT touch bowSpeed_milli here; it stays with its existing producer
 
         // Mirror the old touchSensor_task debug printout for live visibility
-        printf("\rraw=%4u  E=%d  A=%d  D=%d  G=%d    \x1b[0K",
+        printf("\rraw=%4u  E=%d  A=%d  D=%d  G=%d     XIAO=%d    \x1b[0K",
                (unsigned)pkt.analog6,
                g_data->pressures[3], g_data->pressures[2],
-               g_data->pressures[1], g_data->pressures[0]);
+               g_data->pressures[1], g_data->pressures[0], (int)g_data->bowSpeed_milli);
         fflush(stdout);
     } else if (len == (int)sizeof(NeckSensorPacket)) {
         memcpy(&remote_neck_sensors, data, sizeof(NeckSensorPacket));
