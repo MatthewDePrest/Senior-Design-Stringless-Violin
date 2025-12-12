@@ -15,7 +15,7 @@ extern float BASE_FREQUENCY;    // Frequency of the lowest note playable, in Hz
 //     MPU6050_Data imu;
 // } ImuPacket;
 
-typedef struct {
+typedef struct allData {
     int pressures[4];
     float positions[4];
     float stringsFreqs[4];

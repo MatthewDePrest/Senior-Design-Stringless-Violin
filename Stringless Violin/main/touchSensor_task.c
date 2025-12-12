@@ -51,6 +51,7 @@ void touchSensor_task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(100));
     int read_count = 0;
     while (!data->end) {
+        /*
         int raw = adc1_get_raw(ADC1_CHANNEL_5);
         // int raw2 = adc1_get_raw(ADC1_CHANNEL_4);
         int stringE = gpio_get_level(8);
@@ -67,10 +68,11 @@ void touchSensor_task(void *pvParameters) {
         data->pressures[2] = stringA ? 1023 : 0;
         data->pressures[3] = stringE ? 1023 : 0;
         //data->pressures[3] = raw3;
+        */
         if (read_count++ % 50 == 0) {
             //printf("ADC raw=%4d, ADC raw2=%4d,ADC raw3=%4d\n", raw, stringE, stringA);
             printf("\rraw=%4d  E=%d  A=%d  D=%d  G=%d    \x1b[0K",
-               raw, stringE, stringA, stringD, stringG);
+               (int)data->positions[3], data->pressures[3], data->pressures[2], data->pressures[1], data->pressures[0]);
             fflush(stdout);
         }
         vTaskDelay(pdMS_TO_TICKS(10));

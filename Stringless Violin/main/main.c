@@ -66,13 +66,15 @@ void app_main(void)
 
     allData data = {0};
     data.end = 0;   
+
+    esp_now_set_data_ptr(&data);
+    esp_now_receiver_init();
     // data.pressures[0] = 1023;
 
     // pressureSensor(&data); // edit 1 removed pressure sensor
     // accelerometer(&data); // Edit 2 removed accelerometer
     // touchSensor(&data);
     // mpu6050_init();
-    esp_now_receiver_init();
     xTaskCreate(touchSensor_task, "touchSensor_task", 4096, &data, 10, NULL);
     
     // Create output task (HIGHEST priority - audio critical)
@@ -118,7 +120,7 @@ void app_main(void)
         float dist = calculate_distance(local, remote);
 
         // Print connectivity status every 5 seconds (5000 ms / 1000 ms = 5 loops)
-        if (loop_count % 5 == 0) {
+        if (loop_count % 500 == 0) {
             if (s_remote_connected) {
                 printf("\r[CONNECTED] Distance: %.2f | Local Gyro: [%.2f, %.2f, %.2f] | Remote Gyro: [%.2f, %.2f, %.2f]\x1b[0K",
                        dist,
@@ -133,7 +135,7 @@ void app_main(void)
 
         // touchSensor(&data);
         loop_count++;
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));  // Reduced from 1000ms to 100ms for faster responsiveness
     }
 
     vTaskDelete(NULL);

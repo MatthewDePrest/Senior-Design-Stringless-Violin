@@ -1,8 +1,8 @@
 {
-  "idf.espIdfPathWin": "d:\\SeniorDesign\\v5.5.1\\esp-idf",
-  "idf.toolsPathWin": "d:\\SeniorDesign\\5.5",
-  "idf.pythonInstallPath": "d:\\SeniorDesign\\5.5\\tools\\idf-python\\3.11.2\\python.exe",
-  "idf.portWin": "COM10",
+  "idf.espIdfPathWin": "C:\\Users\\Oliver\\esp\\v5.3.4\\esp-idf",
+  "idf.toolsPathWin": "C:\\Users\\Oliver\\.espressif",
+  "idf.pythonInstallPath": "C:\\Users\\Oliver\\.espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.portWin": "COM7",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],

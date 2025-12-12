@@ -1,18 +1,24 @@
-#ifndef ESP_NOW_NECK_RECEIVER_H
-#define ESP_NOW_NECK_RECEIVER_H
-
+#pragma once
 #include <stdint.h>
-#include <stdbool.h>
+#include "esp_now.h"
 
-// Packet from neck ESP with pressure and touch sensors
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// allData is defined in main.h; forward declare to avoid duplicate definitions
+typedef struct allData allData;
+
+// Packet sent from the neck ESP containing finger pressures and positions
 typedef struct {
-    int pressures[4];      // Pressure values for 4 strings (0-1023)
-    float positions[4];    // Touch position values for 4 strings (0-4095)
-    uint32_t timestamp;    // Packet timestamp
+    int pressures[4];
+    float positions[4];
 } NeckSensorPacket;
 
+// Initializes the ESP-NOW receiver dedicated to neck sensor packets
 void esp_now_neck_receiver_init(void);
-NeckSensorPacket* get_neck_sensors(void);
-bool is_neck_data_fresh(uint32_t max_age_ms);
+void esp_now_set_data_ptr(allData *ptr);
 
+#ifdef __cplusplus
+}
 #endif

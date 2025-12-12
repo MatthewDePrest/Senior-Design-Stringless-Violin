@@ -1,5 +1,4 @@
 #include "esp_now_reciever.h"
-#include "esp_now_neck_receiver.h"
 #include "esp_log.h"
 #include "esp_now.h"
 #include "esp_wifi.h"
@@ -11,12 +10,24 @@
 static ImuPacket remote_imu;
 static ImuPacket local_imu;
 static NeckSensorPacket remote_neck_sensors;
+static allData *g_data = NULL;
 static uint32_t last_packet_time = 0;
 static uint32_t last_neck_packet_time = 0;
 static uint32_t last_neck_log_time = 0;
 static uint32_t packet_count = 0;
-static uint32_t last_debug_time = 0;
 static bool neck_connected = false;
+
+typedef struct {
+    uint8_t pin8;
+    uint8_t pin18;
+    uint8_t pin4;
+    uint8_t pin5;
+    uint16_t analog6;
+} PinPacket;
+
+void esp_now_set_data_ptr(allData *ptr) {
+    g_data = ptr;
+}
 
 static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
     // Log ALL received packets for debugging (every 2 sec)
@@ -35,6 +46,37 @@ static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data
     // Discriminate packet types by size
     if (len == (int)sizeof(ImuPacket)) {
         memcpy(&remote_imu, data, sizeof(ImuPacket));
+        if (g_data) {
+            // optional: could map IMU into g_data if needed
+        }
+    } else if (len == (int)sizeof(PinPacket)) {
+        if (!g_data) {
+            ESP_LOGW("ESP_NOW", "PinPacket received before data ptr set");
+            return;
+        }
+        PinPacket pkt;
+        memcpy(&pkt, data, sizeof(PinPacket));
+
+        // Digital pins come in as 0/1; scale to 0/1023 like the old touchSensor_task did
+        g_data->pressures[3] = pkt.pin8  ? 1023 : 0;
+        g_data->pressures[2] = pkt.pin18 ? 1023 : 0;
+        g_data->pressures[1] = pkt.pin4  ? 1023 : 0;
+        g_data->pressures[0] = pkt.pin5  ? 1023 : 0;
+
+        // Map analog reading to positions (mirroring old touchSensor_task behavior)
+        g_data->positions[0] = (float)pkt.analog6;
+        g_data->positions[1] = (float)pkt.analog6;
+        g_data->positions[2] = (float)pkt.analog6;
+        g_data->positions[3] = (float)pkt.analog6;
+
+        // Do NOT touch bowSpeed_milli here; it stays with its existing producer
+
+        // Mirror the old touchSensor_task debug printout for live visibility
+        printf("\rraw=%4u  E=%d  A=%d  D=%d  G=%d    \x1b[0K",
+               (unsigned)pkt.analog6,
+               g_data->pressures[3], g_data->pressures[2],
+               g_data->pressures[1], g_data->pressures[0]);
+        fflush(stdout);
     } else if (len == (int)sizeof(NeckSensorPacket)) {
         memcpy(&remote_neck_sensors, data, sizeof(NeckSensorPacket));
         last_neck_packet_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
