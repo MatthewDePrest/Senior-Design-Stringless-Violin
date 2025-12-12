@@ -60,10 +60,10 @@ static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data
         memcpy(&pkt, data, sizeof(PinPacket));
 
         // Digital pins come in as 0/1; scale to 0/1023 like the old touchSensor_task did
-        g_data->pressures[3] = pkt.pin8  ? 4091 : 0;
-        g_data->pressures[2] = pkt.pin18 ? 4091 : 0;
+        g_data->pressures[0] = pkt.pin8  ? 4091 : 0;
+        g_data->pressures[3] = pkt.pin18 ? 4091 : 0;
         g_data->pressures[1] = pkt.pin4  ? 4091 : 0;
-        g_data->pressures[0] = pkt.pin5  ? 4091 : 0;
+        g_data->pressures[2] = pkt.pin5  ? 4091 : 0;
 
         // Map analog reading to positions (mirroring old touchSensor_task behavior)
         g_data->positions[1] = (float)pkt.analog6;
