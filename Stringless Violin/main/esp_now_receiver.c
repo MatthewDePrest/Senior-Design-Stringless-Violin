@@ -1,4 +1,5 @@
 #include "esp_now_reciever.h"
+#include "esp_now_neck_receiver.h"
 #include "esp_log.h"
 #include "esp_now.h"
 #include "esp_wifi.h"
@@ -9,30 +10,55 @@
 
 static ImuPacket remote_imu;
 static ImuPacket local_imu;
+static NeckSensorPacket remote_neck_sensors;
 static uint32_t last_packet_time = 0;
+static uint32_t last_neck_packet_time = 0;
+static uint32_t last_neck_log_time = 0;
 static uint32_t packet_count = 0;
 static uint32_t last_debug_time = 0;
+static bool neck_connected = false;
 
 static void esp_now_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
-    if (len == sizeof(ImuPacket)) {
+    // Log ALL received packets for debugging (every 2 sec)
+    if (info && info->src_addr) {
+        static uint32_t last_any_log = 0;
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (now - last_any_log > 2000) {
+            ESP_LOGI("ESP_NOW", "RX from %02X:%02X:%02X:%02X:%02X:%02X | len=%d (ImuPacket=%d, NeckPacket=%d)",
+                     info->src_addr[0], info->src_addr[1], info->src_addr[2],
+                     info->src_addr[3], info->src_addr[4], info->src_addr[5],
+                     len, (int)sizeof(ImuPacket), (int)sizeof(NeckSensorPacket));
+            last_any_log = now;
+        }
+    }
+
+    // Discriminate packet types by size
+    if (len == (int)sizeof(ImuPacket)) {
         memcpy(&remote_imu, data, sizeof(ImuPacket));
+    } else if (len == (int)sizeof(NeckSensorPacket)) {
+        memcpy(&remote_neck_sensors, data, sizeof(NeckSensorPacket));
+        last_neck_packet_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (!neck_connected) {
+            neck_connected = true;
+            ESP_LOGI("ESP_NOW", "Neck ESP connected: receiving sensor packets");
+        }
+        // Log neck data every ~1s
+        if (last_neck_packet_time - last_neck_log_time > 1000) {
+            last_neck_log_time = last_neck_packet_time;
+            ESP_LOGI("ESP_NOW", "Neck pkt press=[%d,%d,%d,%d] pos=[%.0f,%.0f,%.0f,%.0f]",
+                     remote_neck_sensors.pressures[0], remote_neck_sensors.pressures[1],
+                     remote_neck_sensors.pressures[2], remote_neck_sensors.pressures[3],
+                     remote_neck_sensors.positions[0], remote_neck_sensors.positions[1],
+                     remote_neck_sensors.positions[2], remote_neck_sensors.positions[3]);
+        }
+    } else {
+        return;
     }
+
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    uint32_t time_since_last = now - last_packet_time;
-    last_packet_time = now;
+    (void)now;
     packet_count++;
-    
-    // Print connection speed every 1 second
-    if (now - last_debug_time > 1000) {
-        float packets_per_sec = packet_count / ((float)(now - last_debug_time) / 1000.0f);
-        float avg_latency_ms = (float)time_since_last;
-        
-        ESP_LOGI("ESP_NOW", "RX Speed: %.1f packets/sec | Latency: %.1f ms | Total: %lu packets",
-                 packets_per_sec, avg_latency_ms, (unsigned long)packet_count);
-        
-        last_debug_time = now;
-        packet_count = 0;
-    }
+    last_packet_time = now;
 }
 
 void esp_now_receiver_init(void) {
@@ -54,4 +80,9 @@ ImuPacket* get_remote_imu(void) {
 
 ImuPacket* get_local_imu(void) {
     return &local_imu;
+}
+
+// Provide accessors for neck sensor data from unified RX path
+NeckSensorPacket* get_neck_sensors(void) {
+    return &remote_neck_sensors;
 }
